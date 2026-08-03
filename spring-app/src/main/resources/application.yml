@@ -1,0 +1,35 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: credit-risk-prediction
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:credit_risk}?sslMode=${DB_SSL_MODE:DISABLED}&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USERNAME:spring_app}
+    password: ${DB_PASSWORD:change-me}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  mvc:
+    view:
+      prefix: /WEB-INF/views/
+      suffix: .jsp
+
+mybatis:
+  mapper-locations: classpath:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    jdbc-type-for-null: 'NULL'
+
+ai:
+  server:
+    base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
+    connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:2}
+    read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:15}
+  model:
+    version: ${AI_MODEL_VERSION:miribom-lgbm-v0.3}
+    prompt-version: ${AI_PROMPT_VERSION:v1.0}
+

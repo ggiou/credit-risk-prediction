@@ -1,0 +1,94 @@
+package com.creditrisk.common.exception;
+
+import com.creditrisk.common.api.RequestIdFilter;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Controller에서 발생한 예외를 공통 오류 응답으로 변환한다.
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * 업무 예외를 명세된 오류 코드와 상태로 반환한다.
+     *
+     * @param exception 발생한 업무 예외
+     * @param request 현재 요청
+     * @return 공통 오류 응답
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<Map<String, Object>> handleBusinessException(
+            BusinessException exception, HttpServletRequest request) {
+        // 고객번호와 기준월처럼 허용된 상세 정보만 응답에 포함한다.
+        return ResponseEntity.status(exception.getStatus())
+                .body(errorBody(exception.getCode(), exception.getMessage(), exception.getDetails(), request));
+    }
+
+    /**
+     * 요청 DTO 검증 실패를 잘못된 요청 오류로 반환한다.
+     *
+     * @param exception 입력값 검증 예외
+     * @param request 현재 요청
+     * @return 공통 오류 응답
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationException(
+            MethodArgumentNotValidException exception, HttpServletRequest request) {
+        // 여러 필드가 실패해도 화면이 최초 수정 지점을 바로 알 수 있도록 첫 오류를 사용한다.
+        String message = exception.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .orElse("요청값이 올바르지 않습니다.");
+        return ResponseEntity.badRequest()
+                .body(errorBody("INVALID_REQUEST", message, Map.of(), request));
+    }
+
+    /**
+     * 예상하지 못한 오류의 내부 정보를 숨기고 공통 서버 오류로 반환한다.
+     *
+     * @param exception 처리되지 않은 예외
+     * @param request 현재 요청
+     * @return 공통 오류 응답
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleUnexpectedException(
+            Exception exception, HttpServletRequest request) {
+        // 실패 원인은 서버 로그에만 기록하고 SQL·인증 정보는 화면 응답에 노출하지 않는다.
+        log.error("처리되지 않은 서버 오류가 발생했습니다.", exception);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(errorBody("INTERNAL_SERVER_ERROR", "요청 처리 중 오류가 발생했습니다.", Map.of(), request));
+    }
+
+    /**
+     * 명세에 맞는 공통 오류 본문을 생성한다.
+     */
+    private Map<String, Object> errorBody(
+            String code, String message, Map<String, Object> details, HttpServletRequest request) {
+        // LinkedHashMap으로 필드 순서를 고정해 로그와 API 문서 비교를 쉽게 한다.
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("code", code);
+        error.put("message", message);
+        error.put("details", details);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", false);
+        body.put("error", error);
+        body.put("timestamp", Instant.now());
+        body.put("requestId", request.getAttribute(RequestIdFilter.ATTRIBUTE_NAME));
+        return body;
+    }
+}
+

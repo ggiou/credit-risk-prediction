@@ -1,0 +1,15 @@
+.gradle/
+build/
+**/build/
+.idea/
+*.iml
+.env
+application-local.yml
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+ai-server/models/*.txt
+ai-server/models/*.pkl
+ai-server/models/*.joblib
+
