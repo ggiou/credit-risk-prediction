@@ -4,6 +4,10 @@ build/
 .idea/
 *.iml
 .env
+.env.*
+!.env.example
+/config/application-secret.yml
+/spring-app/src/main/resources/application-secret.yml
 application-local.yml
 __pycache__/
 .pytest_cache/
@@ -12,4 +16,6 @@ __pycache__/
 ai-server/models/*.txt
 ai-server/models/*.pkl
 ai-server/models/*.joblib
-
+ai-server/models/*.onnx
+ai-server/models/*.bin
+*.bundle
