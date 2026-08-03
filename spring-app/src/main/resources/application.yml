@@ -6,12 +6,14 @@ server:
       force: true
 
 spring:
+  config:
+    import: ${SPRING_CONFIG_IMPORT:optional:file:./config/application-secret.yml}
   application:
     name: credit-risk-prediction
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:credit_risk}?sslMode=${DB_SSL_MODE:DISABLED}&serverTimezone=UTC&characterEncoding=UTF-8
     username: ${DB_USERNAME:spring_app}
-    password: ${DB_PASSWORD:change-me}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
   mvc:
     view:
@@ -32,4 +34,3 @@ ai:
   model:
     version: ${AI_MODEL_VERSION:miribom-lgbm-v0.3}
     prompt-version: ${AI_PROMPT_VERSION:v1.0}
-
