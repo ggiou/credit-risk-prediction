@@ -107,7 +107,6 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     feature_snapshot_id BIGINT UNSIGNED NOT NULL,
     input_hash CHAR(64) NOT NULL COMMENT '동일 입력 결과 재사용용 SHA-256',
     model_version VARCHAR(64) NOT NULL,
-    feature_schema_version VARCHAR(32) NOT NULL,
     hazard_1m DOUBLE NOT NULL,
     hazard_2m DOUBLE NOT NULL,
     hazard_3m DOUBLE NOT NULL,
@@ -117,7 +116,8 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     reasons JSON NULL,
     explanation TEXT NULL,
     recommendation TEXT NULL COMMENT '현재 MVP에서 사용하지 않음',
-    llm_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUESTED',
+    llm_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUESTED'
+        COMMENT 'LLM 설명 생성 상태: NOT_REQUESTED=요청 전, COMPLETED=생성 완료, FAILED=생성 실패',
     llm_model VARCHAR(100) NULL,
     prompt_version VARCHAR(32) NULL,
     llm_error_message VARCHAR(500) NULL,
@@ -137,4 +137,3 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     CONSTRAINT chk_risk_grade CHECK (risk_grade IN ('정상', '관심', '주의', '경고')),
     CONSTRAINT chk_llm_status CHECK (llm_status IN ('NOT_REQUESTED', 'COMPLETED', 'FAILED'))
 ) COMMENT='모델 예측 및 LLM 설명 결과';
-

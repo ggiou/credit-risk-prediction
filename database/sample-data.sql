@@ -85,13 +85,13 @@ VALUES
 ON DUPLICATE KEY UPDATE features = VALUES(features), calculated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO prediction_result (
-    feature_snapshot_id, input_hash, model_version, feature_schema_version,
+    feature_snapshot_id, input_hash, model_version,
     hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m, risk_grade, percentile,
     reasons, explanation, llm_status, llm_model, prompt_version, predicted_at
 )
 SELECT feature_snapshot_id,
        SHA2(CONCAT(customer_id, base_ym, '-demo'), 256),
-       'miribom-lgbm-v0.3', 'v1',
+       'miribom-lgbm-v0.3',
        CASE customer_id WHEN 'SYN_123' THEN 0.481 WHEN 'SYN_789' THEN 0.214 ELSE 0.082 END,
        CASE customer_id WHEN 'SYN_123' THEN 0.624 WHEN 'SYN_789' THEN 0.296 ELSE 0.124 END,
        CASE customer_id WHEN 'SYN_123' THEN 0.781 WHEN 'SYN_789' THEN 0.387 ELSE 0.181 END,
@@ -114,4 +114,3 @@ SELECT feature_snapshot_id,
 FROM feature_snapshot
 WHERE base_ym = '201812'
 ON DUPLICATE KEY UPDATE predicted_at = VALUES(predicted_at);
-
