@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.creditrisk.dashboard.mapper.DashboardMapper">
+
+    <sql id="latestPredictionJoin">
+        JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
+        JOIN (
+            SELECT feature_snapshot_id, MAX(predicted_at) AS max_predicted_at
+            FROM prediction_result
+            WHERE model_version = #{modelVersion}
+            GROUP BY feature_snapshot_id
+        ) latest ON latest.feature_snapshot_id = pr.feature_snapshot_id
+            AND latest.max_predicted_at = pr.predicted_at
+    </sql>
+
+    <select id="countTargetCustomers" resultType="long">
+        SELECT COUNT(DISTINCT customer_id)
+        FROM feature_snapshot
+        WHERE base_ym = #{baseYm}
+    </select>
+
+    <select id="findPredictionSummary" resultType="map">
+        SELECT COUNT(DISTINCT pr.prediction_id) AS predictionCompletedCount,
+               SUM(CASE WHEN pr.risk_grade = '경고' THEN 1 ELSE 0 END) AS highRiskCustomerCount,
+               SUM(CASE WHEN previous_pr.hazard_3m IS NOT NULL
+                             AND pr.hazard_3m &gt; previous_pr.hazard_3m THEN 1 ELSE 0 END)
+                   AS riskIncreasedCustomerCount
+        FROM prediction_result pr
+        <include refid="latestPredictionJoin"/>
+        LEFT JOIN feature_snapshot previous_fs
+            ON previous_fs.customer_id = fs.customer_id
+            AND previous_fs.base_ym = #{previousBaseYm}
+            AND previous_fs.feature_schema_version = fs.feature_schema_version
+        LEFT JOIN prediction_result previous_pr
+            ON previous_pr.feature_snapshot_id = previous_fs.feature_snapshot_id
+            AND previous_pr.model_version = #{modelVersion}
+        WHERE fs.base_ym = #{baseYm}
+          AND pr.model_version = #{modelVersion}
+    </select>
+
+    <select id="findRiskDistribution" resultType="map">
+        SELECT CASE pr.risk_grade
+                   WHEN '정상' THEN 'NORMAL'
+                   WHEN '관심' THEN 'INTEREST'
+                   WHEN '주의' THEN 'CAUTION'
+                   WHEN '경고' THEN 'WARNING'
+               END AS riskGrade,
+               pr.risk_grade AS riskGradeName,
+               COUNT(*) AS count
+        FROM prediction_result pr
+        <include refid="latestPredictionJoin"/>
+        WHERE fs.base_ym = #{baseYm}
+          AND pr.model_version = #{modelVersion}
+        GROUP BY pr.risk_grade
+        ORDER BY FIELD(pr.risk_grade, '정상', '관심', '주의', '경고')
+    </select>
+
+    <select id="findAverageRisk" resultType="map">
+        SELECT COALESCE(AVG(pr.hazard_1m), 0) AS hazard1m,
+               COALESCE(AVG(pr.hazard_2m), 0) AS hazard2m,
+               COALESCE(AVG(pr.hazard_3m), 0) AS hazard3m
+        FROM prediction_result pr
+        <include refid="latestPredictionJoin"/>
+        WHERE fs.base_ym = #{baseYm}
+          AND pr.model_version = #{modelVersion}
+    </select>
+
+    <select id="findHighRiskCustomers" resultType="map">
+        SELECT fs.customer_id AS customerId,
+               pr.prediction_id AS predictionId,
+               CASE pr.risk_grade
+                   WHEN '정상' THEN 'NORMAL'
+                   WHEN '관심' THEN 'INTEREST'
+                   WHEN '주의' THEN 'CAUTION'
+                   WHEN '경고' THEN 'WARNING'
+               END AS riskGrade,
+               pr.risk_grade AS riskGradeName,
+               pr.hazard_1m AS hazard1m,
+               pr.hazard_2m AS hazard2m,
+               pr.hazard_3m AS hazard3m,
+               pr.hazard_3m - previous_pr.hazard_3m AS riskChange3m,
+               COALESCE(JSON_UNQUOTE(JSON_EXTRACT(pr.reasons, '$[0].displayName')), '주요 요인 없음')
+                   AS primaryRiskFactor
+        FROM prediction_result pr
+        <include refid="latestPredictionJoin"/>
+        LEFT JOIN feature_snapshot previous_fs
+            ON previous_fs.customer_id = fs.customer_id
+            AND previous_fs.base_ym = #{previousBaseYm}
+            AND previous_fs.feature_schema_version = fs.feature_schema_version
+        LEFT JOIN prediction_result previous_pr
+            ON previous_pr.feature_snapshot_id = previous_fs.feature_snapshot_id
+            AND previous_pr.model_version = #{modelVersion}
+        WHERE fs.base_ym = #{baseYm}
+          AND pr.model_version = #{modelVersion}
+        ORDER BY pr.hazard_3m DESC
+        LIMIT #{limit}
+    </select>
+</mapper>
+
