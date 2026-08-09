@@ -57,6 +57,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Controller의 직접 입력 검증 실패를 잘못된 요청 오류로 반환한다.
+     *
+     * @param exception 잘못된 입력값 예외
+     * @param request 현재 요청
+     * @return 공통 오류 응답
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(
+            IllegalArgumentException exception, HttpServletRequest request) {
+        // 업무 데이터가 아닌 쿼리 파라미터 실패이므로 별도 상세값 없이 메시지만 반환한다.
+        return ResponseEntity.badRequest()
+                .body(errorBody("INVALID_REQUEST", exception.getMessage(), Map.of(), request));
+    }
+
+    /**
      * 예상하지 못한 오류의 내부 정보를 숨기고 공통 서버 오류로 반환한다.
      *
      * @param exception 처리되지 않은 예외
@@ -91,4 +106,3 @@ public class GlobalExceptionHandler {
         return body;
     }
 }
-
