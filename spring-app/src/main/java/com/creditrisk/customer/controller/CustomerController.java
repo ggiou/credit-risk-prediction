@@ -7,11 +7,14 @@ import com.creditrisk.common.domain.RiskGrade;
 import com.creditrisk.common.web.QueryValidator;
 import com.creditrisk.common.web.RequestIds;
 import com.creditrisk.customer.dto.CustomerListItem;
+import com.creditrisk.customer.dto.CustomerSummaryResponse;
+import com.creditrisk.customer.service.CustomerDetailService;
 import com.creditrisk.customer.service.CustomerService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Set;
@@ -27,10 +30,30 @@ public class CustomerController {
             "customerId", "hazard1m", "hazard2m", "hazard3m", "riskChange3m", "predictedAt");
 
     private final CustomerService customerService;
+    private final CustomerDetailService customerDetailService;
 
     /** 고객 검색 서비스를 주입받는다. */
-    public CustomerController(CustomerService customerService) {
+    public CustomerController(CustomerService customerService, CustomerDetailService customerDetailService) {
         this.customerService = customerService;
+        this.customerDetailService = customerDetailService;
+    }
+
+    /**
+     * 선택 고객의 기준월 금융 요약과 최근 위험률 추이를 조회한다.
+     */
+    @GetMapping("/{customerId}/summary")
+    public ApiResponse<CustomerSummaryResponse> getCustomerSummary(
+            @PathVariable String customerId,
+            @RequestParam(required = false) String baseYm,
+            @RequestParam(defaultValue = "6") int trendMonths,
+            HttpServletRequest request) {
+        // 화면 차트의 과도한 조회를 막고 실제 데이터 기간 안에서 사용하도록 제한한다.
+        QueryValidator.validateBaseYm(baseYm);
+        if (trendMonths < 1 || trendMonths > 12) {
+            throw new IllegalArgumentException("trendMonths는 1 이상 12 이하여야 합니다.");
+        }
+        CustomerSummaryResponse response = customerDetailService.getSummary(customerId, baseYm, trendMonths);
+        return ApiResponse.success(response, RequestIds.from(request));
     }
 
     /**
@@ -84,4 +107,3 @@ public class CustomerController {
         }
     }
 }
-

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.creditrisk.customer.mapper.CustomerDetailMapper">
+
+    <select id="existsCustomer" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM customer WHERE customer_id = #{customerId})
+    </select>
+
+    <select id="findCustomerSummary" resultType="map">
+        SELECT c.display_name AS displayName,
+               c.is_synthetic AS synthetic,
+               pr.prediction_id AS predictionId,
+               CASE
+                   WHEN pr.prediction_id IS NULL THEN 'NOT_ANALYZED'
+                   WHEN pr.llm_status = 'FAILED' THEN 'PARTIAL'
+                   ELSE 'COMPLETED'
+               END AS analysisStatus,
+               CASE pr.risk_grade
+                   WHEN '정상' THEN 'NORMAL'
+                   WHEN '관심' THEN 'INTEREST'
+                   WHEN '주의' THEN 'CAUTION'
+                   WHEN '경고' THEN 'WARNING'
+               END AS riskGrade,
+               pr.risk_grade AS riskGradeName,
+               pr.hazard_1m AS hazard1m,
+               pr.hazard_2m AS hazard2m,
+               pr.hazard_3m AS hazard3m,
+               pr.percentile,
+               pr.predicted_at AS predictedAt,
+               ms.credit_usage_amount_r3m AS creditUsageAmountR3m,
+               ms.valid_credit_card_count AS validCreditCardCount,
+               ms.available_credit_card_count AS availableCreditCardCount,
+               ms.used_credit_card_count AS usedCreditCardCount,
+               bs.billed_amount_b0 AS billedAmountB0,
+               bs.delinquency_count_r3m AS delinquencyCountR3m,
+               bs.on_due_date_payment_month_count_r3m AS onDueDatePaymentMonthCountR3m,
+               bs.prepayment_count_r3m AS prepaymentCountR3m,
+               cs.credit_limit_amount AS creditLimitAmount,
+               cs.cash_advance_limit_amount AS cashAdvanceLimitAmount,
+               cs.revolving_agreed_billing_rate AS revolvingAgreedBillingRate,
+               bals.balance_b0m AS balanceB0m,
+               bals.cash_advance_balance_b0m AS cashAdvanceBalanceB0m,
+               bals.card_loan_balance_b0m AS cardLoanBalanceB0m,
+               bals.revolving_lump_sum_carryover_balance_b0m AS revolvingCarryoverBalanceB0m
+        FROM feature_snapshot fs
+        JOIN customer c ON c.customer_id = fs.customer_id
+        LEFT JOIN member_snapshot ms ON ms.customer_id = fs.customer_id AND ms.base_ym = fs.base_ym
+        LEFT JOIN billing_snapshot bs ON bs.customer_id = fs.customer_id AND bs.base_ym = fs.base_ym
+        LEFT JOIN credit_snapshot cs ON cs.customer_id = fs.customer_id AND cs.base_ym = fs.base_ym
+        LEFT JOIN balance_snapshot bals ON bals.customer_id = fs.customer_id AND bals.base_ym = fs.base_ym
+        LEFT JOIN prediction_result pr
+            ON pr.prediction_id = (
+                SELECT candidate.prediction_id
+                FROM prediction_result candidate
+                WHERE candidate.feature_snapshot_id = fs.feature_snapshot_id
+                  AND candidate.model_version = #{modelVersion}
+                ORDER BY candidate.predicted_at DESC, candidate.prediction_id DESC
+                LIMIT 1
+            )
+        WHERE fs.customer_id = #{customerId}
+          AND fs.base_ym = #{baseYm}
+        LIMIT 1
+    </select>
+
+    <select id="findRiskTrend" resultType="map">
+        SELECT * FROM (
+            SELECT fs.base_ym AS baseYm,
+                   pr.hazard_1m AS hazard1m,
+                   pr.hazard_2m AS hazard2m,
+                   pr.hazard_3m AS hazard3m
+            FROM feature_snapshot fs
+            JOIN prediction_result pr
+                ON pr.prediction_id = (
+                    SELECT candidate.prediction_id
+                    FROM prediction_result candidate
+                    WHERE candidate.feature_snapshot_id = fs.feature_snapshot_id
+                      AND candidate.model_version = #{modelVersion}
+                    ORDER BY candidate.predicted_at DESC, candidate.prediction_id DESC
+                    LIMIT 1
+                )
+            WHERE fs.customer_id = #{customerId}
+              AND fs.base_ym &lt;= #{baseYm}
+            ORDER BY fs.base_ym DESC
+            LIMIT #{months}
+        ) recent ORDER BY baseYm ASC
+    </select>
+
+    <select id="findCardUsage" resultType="map">
+        SELECT * FROM (
+            SELECT base_ym AS baseYm,
+                   credit_membership_months AS creditMembershipMonths,
+                   valid_credit_card_count AS validCreditCardCount,
+                   available_credit_card_count AS availableCreditCardCount,
+                   used_credit_card_count AS usedCreditCardCount,
+                   credit_usage_amount_r3m AS creditUsageAmountR3m,
+                   member_delinquency_flag AS memberDelinquencyFlag
+            FROM member_snapshot
+            WHERE customer_id = #{customerId} AND base_ym &lt;= #{baseYm}
+            ORDER BY base_ym DESC
+            LIMIT #{months}
+        ) recent ORDER BY baseYm ASC
+    </select>
+
+    <select id="findBilling" resultType="map">
+        SELECT * FROM (
+            SELECT base_ym AS baseYm,
+                   billed_amount_b0 AS billedAmountB0,
+                   billed_amount_r3m AS billedAmountR3m,
+                   delinquency_count_r3m AS delinquencyCountR3m,
+                   delinquency_count_r6m AS delinquencyCountR6m,
+                   on_due_date_payment_month_count_r3m AS onDueDatePaymentMonthCountR3m,
+                   prepayment_count_r3m AS prepaymentCountR3m
+            FROM billing_snapshot
+            WHERE customer_id = #{customerId} AND base_ym &lt;= #{baseYm}
+            ORDER BY base_ym DESC
+            LIMIT #{months}
+        ) recent ORDER BY baseYm ASC
+    </select>
+
+    <select id="findCredit" resultType="map">
+        SELECT * FROM (
+            SELECT base_ym AS baseYm,
+                   credit_limit_amount AS creditLimitAmount,
+                   cash_advance_limit_amount AS cashAdvanceLimitAmount,
+                   credit_limit_amount_b1m AS creditLimitAmountB1m,
+                   forced_limit_reduction_count_r12m AS forcedLimitReductionCountR12m,
+                   forced_limit_reduction_amount_r12m AS forcedLimitReductionAmountR12m,
+                   voluntary_limit_reduction_count_r12m AS voluntaryLimitReductionCountR12m,
+                   limit_increase_count_r12m AS limitIncreaseCountR12m,
+                   limit_review_request_count AS limitReviewRequestCount,
+                   limit_request_rejection_count AS limitRequestRejectionCount,
+                   market_short_delinquency_flag_r3m AS marketShortDelinquencyFlagR3m,
+                   market_short_delinquency_flag_r6m AS marketShortDelinquencyFlagR6m,
+                   revolving_agreed_billing_rate AS revolvingAgreedBillingRate
+            FROM credit_snapshot
+            WHERE customer_id = #{customerId} AND base_ym &lt;= #{baseYm}
+            ORDER BY base_ym DESC
+            LIMIT #{months}
+        ) recent ORDER BY baseYm ASC
+    </select>
+
+    <select id="findBalance" resultType="map">
+        SELECT * FROM (
+            SELECT base_ym AS baseYm,
+                   balance_b0m AS balanceB0m,
+                   lump_sum_balance_b0m AS lumpSumBalanceB0m,
+                   installment_balance_b0m AS installmentBalanceB0m,
+                   cash_advance_balance_b0m AS cashAdvanceBalanceB0m,
+                   card_loan_balance_b0m AS cardLoanBalanceB0m,
+                   revolving_lump_sum_carryover_balance_b0m AS revolvingCarryoverBalanceB0m,
+                   cash_advance_balance_b1m AS cashAdvanceBalanceB1m,
+                   card_loan_balance_b1m AS cardLoanBalanceB1m,
+                   monthly_average_balance AS monthlyAverageBalance
+            FROM balance_snapshot
+            WHERE customer_id = #{customerId} AND base_ym &lt;= #{baseYm}
+            ORDER BY base_ym DESC
+            LIMIT #{months}
+        ) recent ORDER BY baseYm ASC
+    </select>
+</mapper>
