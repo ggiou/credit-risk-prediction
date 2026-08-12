@@ -8,6 +8,7 @@ import com.creditrisk.common.web.QueryValidator;
 import com.creditrisk.common.web.RequestIds;
 import com.creditrisk.customer.dto.CustomerListItem;
 import com.creditrisk.customer.dto.CustomerSummaryResponse;
+import com.creditrisk.customer.dto.FinancialDataResponse;
 import com.creditrisk.customer.service.CustomerDetailService;
 import com.creditrisk.customer.service.CustomerService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +54,22 @@ public class CustomerController {
             throw new IllegalArgumentException("trendMonths는 1 이상 12 이하여야 합니다.");
         }
         CustomerSummaryResponse response = customerDetailService.getSummary(customerId, baseYm, trendMonths);
+        return ApiResponse.success(response, RequestIds.from(request));
+    }
+
+    /**
+     * 고객의 월별 카드 이용 및 카드 보유 현황을 조회한다.
+     */
+    @GetMapping("/{customerId}/financials/card-usage")
+    public ApiResponse<FinancialDataResponse> getCardUsage(
+            @PathVariable String customerId,
+            @RequestParam(required = false) String baseYm,
+            @RequestParam(defaultValue = "6") int months,
+            HttpServletRequest request) {
+        // 실제 데이터 기간을 고려해 한 번에 최대 12개월만 조회한다.
+        QueryValidator.validateBaseYm(baseYm);
+        validateMonths(months);
+        FinancialDataResponse response = customerDetailService.getCardUsage(customerId, baseYm, months);
         return ApiResponse.success(response, RequestIds.from(request));
     }
 
@@ -104,6 +121,14 @@ public class CustomerController {
                 || (maxRiskRate != null && (maxRiskRate < 0 || maxRiskRate > 1))
                 || (minRiskRate != null && maxRiskRate != null && minRiskRate > maxRiskRate)) {
             throw new IllegalArgumentException("위험률 범위는 0 이상 1 이하이며 최솟값이 최댓값보다 클 수 없습니다.");
+        }
+    }
+
+    /** 월별 금융 데이터 조회 개수를 검증한다. */
+    private void validateMonths(int months) {
+        // 화면 차트가 사용하는 범위만 허용해 불필요한 대량 조회를 막는다.
+        if (months < 1 || months > 12) {
+            throw new IllegalArgumentException("months는 1 이상 12 이하여야 합니다.");
         }
     }
 }

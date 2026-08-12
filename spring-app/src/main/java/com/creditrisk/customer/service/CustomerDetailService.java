@@ -2,6 +2,7 @@ package com.creditrisk.customer.service;
 
 import com.creditrisk.common.exception.BusinessException;
 import com.creditrisk.customer.dto.CustomerSummaryResponse;
+import com.creditrisk.customer.dto.FinancialDataResponse;
 import com.creditrisk.customer.mapper.CustomerDetailMapper;
 import com.creditrisk.meta.service.MetaService;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Service;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -99,6 +102,45 @@ public class CustomerDetailService {
     }
 
     /**
+     * 고객의 최근 카드 이용금액과 보유·사용 카드 수를 월별로 조회한다.
+     */
+    public FinancialDataResponse getCardUsage(String customerId, String requestedBaseYm, int months) {
+        // 현재 DB에서 제공 가능한 최근 3개월 이용금액과 카드 수만 사용한다.
+        validateCustomer(customerId);
+        String baseYm = metaService.resolveBaseYm(requestedBaseYm);
+        List<Map<String, Object>> monthly = customerDetailMapper.findCardUsage(customerId, baseYm, months);
+        return financialResponse(customerId, baseYm, monthly, "MEMBER_SNAPSHOT_NOT_FOUND");
+    }
+
+    /**
+     * 월별 조회 목록의 마지막 행을 기준월 요약으로 구성한다.
+     */
+    private FinancialDataResponse financialResponse(
+            String customerId,
+            String baseYm,
+            List<Map<String, Object>> monthly,
+            String errorCode) {
+        if (monthly.isEmpty()) {
+            // 원천 스냅샷 적재 실패를 빈 숫자나 0으로 숨기지 않고 화면에 구분해 알린다.
+            throw new BusinessException(
+                    errorCode,
+                    "해당 고객과 기준월의 금융 스냅샷을 찾을 수 없습니다.",
+                    HttpStatus.NOT_FOUND,
+                    Map.of("customerId", customerId, "baseYm", baseYm));
+        }
+
+        // Mapper가 월 오름차순으로 반환하므로 마지막 행이 선택 기준월과 가장 가까운 최신 데이터다.
+        Map<String, Object> summary = new LinkedHashMap<>(monthly.get(monthly.size() - 1));
+        summary.remove("baseYm");
+        // 금융 원천의 null은 결측값 의미가 있으므로 Map.copyOf로 제거하거나 실패시키지 않고 보존한다.
+        return new FinancialDataResponse(
+                customerId,
+                baseYm,
+                Collections.unmodifiableMap(summary),
+                List.copyOf(monthly));
+    }
+
+    /**
      * 고객 존재 여부를 확인하고 없으면 명세된 오류를 발생시킨다.
      */
     public void validateCustomer(String customerId) {
@@ -152,4 +194,3 @@ public class CustomerDetailService {
         return value instanceof Timestamp timestamp ? timestamp.toInstant() : null;
     }
 }
-
