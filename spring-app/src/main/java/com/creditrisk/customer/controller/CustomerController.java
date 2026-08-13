@@ -74,6 +74,22 @@ public class CustomerController {
     }
 
     /**
+     * 고객의 월별 청구금액과 연체·상환 행동을 조회한다.
+     */
+    @GetMapping("/{customerId}/financials/billing")
+    public ApiResponse<FinancialDataResponse> getBilling(
+            @PathVariable String customerId,
+            @RequestParam(required = false) String baseYm,
+            @RequestParam(defaultValue = "6") int months,
+            HttpServletRequest request) {
+        // 기준월과 조회 개수 검증을 공통 기준으로 적용한다.
+        QueryValidator.validateBaseYm(baseYm);
+        validateMonths(months);
+        FinancialDataResponse response = customerDetailService.getBilling(customerId, baseYm, months);
+        return ApiResponse.success(response, RequestIds.from(request));
+    }
+
+    /**
      * 고객번호, 위험등급, 분석 상태, 위험률 범위로 고객을 검색한다.
      */
     @GetMapping

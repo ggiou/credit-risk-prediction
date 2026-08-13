@@ -113,6 +113,17 @@ public class CustomerDetailService {
     }
 
     /**
+     * 고객의 청구금액, 연체 건수, 상환 행동을 월별로 조회한다.
+     */
+    public FinancialDataResponse getBilling(String customerId, String requestedBaseYm, int months) {
+        // 고객 존재 확인 후 청구 스냅샷만 별도로 조회해 다른 원천 누락의 영향을 받지 않게 한다.
+        validateCustomer(customerId);
+        String baseYm = metaService.resolveBaseYm(requestedBaseYm);
+        List<Map<String, Object>> monthly = customerDetailMapper.findBilling(customerId, baseYm, months);
+        return financialResponse(customerId, baseYm, monthly, "BILLING_SNAPSHOT_NOT_FOUND");
+    }
+
+    /**
      * 월별 조회 목록의 마지막 행을 기준월 요약으로 구성한다.
      */
     private FinancialDataResponse financialResponse(
