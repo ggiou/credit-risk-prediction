@@ -90,6 +90,22 @@ public class CustomerController {
     }
 
     /**
+     * 고객의 월별 신용 및 카드 한도 정보를 조회한다.
+     */
+    @GetMapping("/{customerId}/financials/credit")
+    public ApiResponse<FinancialDataResponse> getCredit(
+            @PathVariable String customerId,
+            @RequestParam(required = false) String baseYm,
+            @RequestParam(defaultValue = "6") int months,
+            HttpServletRequest request) {
+        // 잘못된 월과 조회 범위를 Mapper 실행 전에 차단한다.
+        QueryValidator.validateBaseYm(baseYm);
+        validateMonths(months);
+        FinancialDataResponse response = customerDetailService.getCredit(customerId, baseYm, months);
+        return ApiResponse.success(response, RequestIds.from(request));
+    }
+
+    /**
      * 고객번호, 위험등급, 분석 상태, 위험률 범위로 고객을 검색한다.
      */
     @GetMapping

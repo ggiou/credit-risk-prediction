@@ -124,6 +124,17 @@ public class CustomerDetailService {
     }
 
     /**
+     * 고객의 카드 한도, 한도 변경, 단기연체, 리볼빙 정보를 월별로 조회한다.
+     */
+    public FinancialDataResponse getCredit(String customerId, String requestedBaseYm, int months) {
+        // 신용 스냅샷의 결측값은 임의 값으로 바꾸지 않고 응답에 null로 유지한다.
+        validateCustomer(customerId);
+        String baseYm = metaService.resolveBaseYm(requestedBaseYm);
+        List<Map<String, Object>> monthly = customerDetailMapper.findCredit(customerId, baseYm, months);
+        return financialResponse(customerId, baseYm, monthly, "CREDIT_SNAPSHOT_NOT_FOUND");
+    }
+
+    /**
      * 월별 조회 목록의 마지막 행을 기준월 요약으로 구성한다.
      */
     private FinancialDataResponse financialResponse(
