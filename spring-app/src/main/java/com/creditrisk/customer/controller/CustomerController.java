@@ -106,6 +106,22 @@ public class CustomerController {
     }
 
     /**
+     * 고객의 월별 카드 관련 잔액 구성과 변화를 조회한다.
+     */
+    @GetMapping("/{customerId}/financials/balance")
+    public ApiResponse<FinancialDataResponse> getBalance(
+            @PathVariable String customerId,
+            @RequestParam(required = false) String baseYm,
+            @RequestParam(defaultValue = "6") int months,
+            HttpServletRequest request) {
+        // 기준월 형식과 차트 조회 범위를 공통 기준으로 검증한다.
+        QueryValidator.validateBaseYm(baseYm);
+        validateMonths(months);
+        FinancialDataResponse response = customerDetailService.getBalance(customerId, baseYm, months);
+        return ApiResponse.success(response, RequestIds.from(request));
+    }
+
+    /**
      * 고객번호, 위험등급, 분석 상태, 위험률 범위로 고객을 검색한다.
      */
     @GetMapping

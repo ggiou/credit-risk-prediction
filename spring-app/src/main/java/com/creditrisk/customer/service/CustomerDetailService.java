@@ -135,6 +135,17 @@ public class CustomerDetailService {
     }
 
     /**
+     * 고객의 카드 이용 후 남은 잔액을 구성별로 월별 조회한다.
+     */
+    public FinancialDataResponse getBalance(String customerId, String requestedBaseYm, int months) {
+        // 은행 계좌 잔액이 아닌 카드 잔액 스냅샷만 조회하며 학습 정답 컬럼은 Mapper에서 제외한다.
+        validateCustomer(customerId);
+        String baseYm = metaService.resolveBaseYm(requestedBaseYm);
+        List<Map<String, Object>> monthly = customerDetailMapper.findBalance(customerId, baseYm, months);
+        return financialResponse(customerId, baseYm, monthly, "BALANCE_SNAPSHOT_NOT_FOUND");
+    }
+
+    /**
      * 월별 조회 목록의 마지막 행을 기준월 요약으로 구성한다.
      */
     private FinancialDataResponse financialResponse(
