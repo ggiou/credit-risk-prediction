@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.creditrisk.customer.mapper.CustomerMapper">
+
+    <sql id="customerFrom">
+        FROM feature_snapshot fs
+        JOIN customer c ON c.customer_id = fs.customer_id
+        LEFT JOIN prediction_result pr
+            ON pr.prediction_id = (
+                SELECT candidate.prediction_id
+                FROM prediction_result candidate
+                WHERE candidate.feature_snapshot_id = fs.feature_snapshot_id
+                  AND candidate.model_version = #{condition.modelVersion}
+                ORDER BY candidate.predicted_at DESC, candidate.prediction_id DESC
+                LIMIT 1
+            )
+        LEFT JOIN feature_snapshot previous_fs
+            ON previous_fs.customer_id = fs.customer_id
+            AND previous_fs.base_ym = #{condition.previousBaseYm}
+            AND previous_fs.feature_schema_version = fs.feature_schema_version
+        LEFT JOIN prediction_result previous_pr
+            ON previous_pr.prediction_id = (
+                SELECT previous_candidate.prediction_id
+                FROM prediction_result previous_candidate
+                WHERE previous_candidate.feature_snapshot_id = previous_fs.feature_snapshot_id
+                  AND previous_candidate.model_version = #{condition.modelVersion}
+                ORDER BY previous_candidate.predicted_at DESC, previous_candidate.prediction_id DESC
+                LIMIT 1
+            )
+    </sql>
+
+    <sql id="customerWhere">
+        WHERE fs.base_ym = #{condition.baseYm}
+        <if test="condition.customerId != null">
+            AND fs.customer_id LIKE CONCAT(#{condition.customerId}, '%')
+        </if>
+        <if test="condition.riskGradeName != null">
+            AND pr.risk_grade = #{condition.riskGradeName}
+        </if>
+        <if test="condition.analysisStatus == 'NOT_ANALYZED'">
+            AND pr.prediction_id IS NULL
+        </if>
+        <if test="condition.analysisStatus == 'COMPLETED'">
+            AND pr.prediction_id IS NOT NULL AND pr.llm_status = 'COMPLETED'
+        </if>
+        <if test="condition.analysisStatus == 'PARTIAL'">
+            AND pr.prediction_id IS NOT NULL AND pr.llm_status = 'FAILED'
+        </if>
+        <if test="condition.minRiskRate != null">
+            <choose>
+                <when test="condition.horizon == 1">AND pr.hazard_1m &gt;= #{condition.minRiskRate}</when>
+                <when test="condition.horizon == 2">AND pr.hazard_2m &gt;= #{condition.minRiskRate}</when>
+                <otherwise>AND pr.hazard_3m &gt;= #{condition.minRiskRate}</otherwise>
+            </choose>
+        </if>
+        <if test="condition.maxRiskRate != null">
+            <choose>
+                <when test="condition.horizon == 1">AND pr.hazard_1m &lt;= #{condition.maxRiskRate}</when>
+                <when test="condition.horizon == 2">AND pr.hazard_2m &lt;= #{condition.maxRiskRate}</when>
+                <otherwise>AND pr.hazard_3m &lt;= #{condition.maxRiskRate}</otherwise>
+            </choose>
+        </if>
+    </sql>
+
+    <select id="findCustomers" resultType="map">
+        SELECT c.customer_id AS customerId,
+               c.display_name AS displayName,
+               fs.base_ym AS baseYm,
+               pr.prediction_id AS predictionId,
+               CASE
+                   WHEN pr.prediction_id IS NULL THEN 'NOT_ANALYZED'
+                   WHEN pr.llm_status = 'FAILED' THEN 'PARTIAL'
+                   ELSE 'COMPLETED'
+               END AS analysisStatus,
+               CASE pr.risk_grade
+                   WHEN '정상' THEN 'NORMAL'
+                   WHEN '관심' THEN 'INTEREST'
+                   WHEN '주의' THEN 'CAUTION'
+                   WHEN '경고' THEN 'WARNING'
+               END AS riskGrade,
+               pr.risk_grade AS riskGradeName,
+               pr.hazard_1m AS hazard1m,
+               pr.hazard_2m AS hazard2m,
+               pr.hazard_3m AS hazard3m,
+               pr.hazard_3m - previous_pr.hazard_3m AS riskChange3m,
+               JSON_UNQUOTE(JSON_EXTRACT(pr.reasons, '$[0].displayName')) AS primaryRiskFactor,
+               pr.predicted_at AS predictedAt
+        <include refid="customerFrom"/>
+        <include refid="customerWhere"/>
+        ORDER BY
+        <choose>
+            <when test="condition.sortField == 'customerId'">fs.customer_id</when>
+            <when test="condition.sortField == 'hazard1m'">pr.hazard_1m</when>
+            <when test="condition.sortField == 'hazard2m'">pr.hazard_2m</when>
+            <when test="condition.sortField == 'riskChange3m'">riskChange3m</when>
+            <when test="condition.sortField == 'predictedAt'">pr.predicted_at</when>
+            <otherwise>pr.hazard_3m</otherwise>
+        </choose>
+        <choose>
+            <when test="condition.sortDirection == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+        LIMIT #{condition.size} OFFSET #{condition.offset}
+    </select>
+
+    <select id="countCustomers" resultType="long">
+        SELECT COUNT(*)
+        <include refid="customerFrom"/>
+        <include refid="customerWhere"/>
+    </select>
+</mapper>
+
