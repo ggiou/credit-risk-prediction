@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.creditrisk.prediction.mapper.PredictionMapper">
+
+    <sql id="historyFrom">
+        FROM prediction_result pr
+        JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
+    </sql>
+
+    <sql id="historyWhere">
+        <where>
+            <if test="condition.customerId != null">
+                AND fs.customer_id = #{condition.customerId}
+            </if>
+            <if test="condition.baseYm != null">
+                AND fs.base_ym = #{condition.baseYm}
+            </if>
+            <if test="condition.riskGradeName != null">
+                AND pr.risk_grade = #{condition.riskGradeName}
+            </if>
+            <if test="condition.modelVersion != null">
+                AND pr.model_version = #{condition.modelVersion}
+            </if>
+            <if test="condition.llmStatus != null">
+                AND pr.llm_status = #{condition.llmStatus}
+            </if>
+            <if test="condition.predictedFrom != null">
+                AND pr.predicted_at &gt;= #{condition.predictedFrom}
+            </if>
+            <if test="condition.predictedTo != null">
+                AND pr.predicted_at &lt;= #{condition.predictedTo}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findHistory" resultType="map">
+        SELECT pr.prediction_id AS predictionId,
+               pr.predicted_at AS predictedAt,
+               fs.customer_id AS customerId,
+               fs.base_ym AS baseYm,
+               pr.hazard_1m AS hazard1m,
+               pr.hazard_2m AS hazard2m,
+               pr.hazard_3m AS hazard3m,
+               CASE pr.risk_grade
+                   WHEN '정상' THEN 'NORMAL'
+                   WHEN '관심' THEN 'INTEREST'
+                   WHEN '주의' THEN 'CAUTION'
+                   WHEN '경고' THEN 'WARNING'
+               END AS riskGrade,
+               pr.risk_grade AS riskGradeName,
+               pr.model_version AS modelVersion,
+               pr.feature_schema_version AS featureSchemaVersion,
+               pr.llm_status AS llmStatus,
+               pr.llm_model AS llmModel,
+               pr.prompt_version AS promptVersion
+        <include refid="historyFrom"/>
+        <include refid="historyWhere"/>
+        ORDER BY pr.predicted_at
+        <choose>
+            <when test="condition.sortDirection == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+        LIMIT #{condition.size} OFFSET #{condition.offset}
+    </select>
+
+    <select id="countHistory" resultType="long">
+        SELECT COUNT(*)
+        <include refid="historyFrom"/>
+        <include refid="historyWhere"/>
+    </select>
+
+    <select id="findById" resultType="map">
+        SELECT pr.*, fs.customer_id, fs.base_ym
+        FROM prediction_result pr
+        JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
+        WHERE pr.prediction_id = #{predictionId}
+    </select>
+
+    <select id="findCurrent" resultType="map">
+        SELECT pr.*, fs.customer_id, fs.base_ym
+        FROM prediction_result pr
+        JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
+        WHERE fs.customer_id = #{customerId}
+          AND fs.base_ym = #{baseYm}
+          AND pr.model_version = #{modelVersion}
+        ORDER BY pr.predicted_at DESC, pr.prediction_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findFeatureSnapshots" resultType="map">
+        SELECT feature_snapshot_id AS featureSnapshotId,
+               customer_id AS customerId,
+               base_ym AS baseYm,
+               feature_schema_version AS featureSchemaVersion,
+               CAST(features AS CHAR) AS features
+        FROM feature_snapshot
+        WHERE customer_id = #{customerId}
+          AND base_ym IN (#{baseYm}, #{previousBaseYm})
+        ORDER BY base_ym DESC
+    </select>
+
+    <select id="findByInputHash" resultType="map">
+        SELECT pr.*, fs.customer_id, fs.base_ym
+        FROM prediction_result pr
+        JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
+        WHERE pr.input_hash = #{inputHash}
+        LIMIT 1
+    </select>
+
+    <insert id="insertPrediction" parameterType="map" useGeneratedKeys="true" keyProperty="predictionId">
+        INSERT INTO prediction_result (
+            feature_snapshot_id, input_hash, model_version, feature_schema_version,
+            hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m,
+            risk_grade, percentile, reasons, explanation, recommendation,
+            llm_status, llm_model, prompt_version, llm_error_message, predicted_at
+        ) VALUES (
+            #{featureSnapshotId}, #{inputHash}, #{modelVersion}, #{featureSchemaVersion},
+            #{hazard1m}, #{hazard2m}, #{hazard3m}, #{cumulativeRisk3m},
+            #{riskGradeName}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, NULL,
+            #{llmStatus}, #{llmModel}, #{promptVersion}, #{llmErrorMessage}, #{predictedAt}
+        )
+    </insert>
+</mapper>
+
