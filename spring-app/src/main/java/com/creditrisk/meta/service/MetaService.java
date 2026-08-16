@@ -3,6 +3,7 @@ package com.creditrisk.meta.service;
 import com.creditrisk.common.exception.BusinessException;
 import com.creditrisk.meta.dto.BaseMonthResponse;
 import com.creditrisk.meta.mapper.MetaMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -13,18 +14,11 @@ import java.util.Map;
  * 화면 공통 검색 조건을 구성한다.
  */
 @Service
+@RequiredArgsConstructor
 public class MetaService {
 
     private final MetaMapper metaMapper;
 
-    /**
-     * 기준년월 조회 Mapper를 주입받는다.
-     *
-     * @param metaMapper 화면 공통 조회 Mapper
-     */
-    public MetaService(MetaMapper metaMapper) {
-        this.metaMapper = metaMapper;
-    }
 
     /**
      * 사용 가능한 기준년월과 기본 선택값을 반환한다.
@@ -61,4 +55,3 @@ public class MetaService {
         return requestedBaseYm;
     }
 }
-

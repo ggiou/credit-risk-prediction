@@ -6,6 +6,7 @@ import com.creditrisk.common.domain.RiskGrade;
 import com.creditrisk.prediction.dto.PredictionHistoryCondition;
 import com.creditrisk.prediction.dto.PredictionHistoryItem;
 import com.creditrisk.prediction.mapper.PredictionMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -17,14 +18,10 @@ import java.util.Map;
  * 전체 또는 특정 고객의 과거 예측 결과를 검색한다.
  */
 @Service
+@RequiredArgsConstructor
 public class PredictionHistoryService {
 
     private final PredictionMapper predictionMapper;
-
-    /** 예측 조회 Mapper를 주입받는다. */
-    public PredictionHistoryService(PredictionMapper predictionMapper) {
-        this.predictionMapper = predictionMapper;
-    }
 
     /**
      * 검색 조건에 맞는 예측 이력을 페이지로 반환한다.
@@ -109,4 +106,3 @@ public class PredictionHistoryService {
         return value instanceof Timestamp timestamp ? timestamp.toInstant() : null;
     }
 }
-
