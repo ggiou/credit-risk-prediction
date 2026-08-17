@@ -7,12 +7,15 @@ import com.creditrisk.common.domain.RiskGrade;
 import com.creditrisk.common.web.QueryValidator;
 import com.creditrisk.common.web.RequestIds;
 import com.creditrisk.prediction.dto.PredictionHistoryItem;
+import com.creditrisk.prediction.dto.PredictionDetailResponse;
 import com.creditrisk.prediction.service.PredictionHistoryService;
+import com.creditrisk.prediction.service.PredictionQueryService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -26,10 +29,29 @@ import java.util.Set;
 public class PredictionController {
 
     private final PredictionHistoryService predictionHistoryService;
+    private final PredictionQueryService predictionQueryService;
 
     /** 예측 이력 서비스를 주입받는다. */
-    public PredictionController(PredictionHistoryService predictionHistoryService) {
+    public PredictionController(
+            PredictionHistoryService predictionHistoryService,
+            PredictionQueryService predictionQueryService) {
         this.predictionHistoryService = predictionHistoryService;
+        this.predictionQueryService = predictionQueryService;
+    }
+
+    /**
+     * 선택한 예측 이력의 저장 결과를 상세 조회한다.
+     */
+    @GetMapping("/{predictionId}")
+    public ApiResponse<PredictionDetailResponse> getPrediction(
+            @PathVariable long predictionId,
+            HttpServletRequest request) {
+        // 양수가 아닌 ID는 DB를 조회하지 않고 잘못된 요청으로 처리한다.
+        if (predictionId < 1) {
+            throw new IllegalArgumentException("predictionId는 1 이상이어야 합니다.");
+        }
+        PredictionDetailResponse response = predictionQueryService.getById(predictionId);
+        return ApiResponse.success(response, RequestIds.from(request));
     }
 
     /**
@@ -70,4 +92,3 @@ public class PredictionController {
         return ApiResponse.success(response, RequestIds.from(request));
     }
 }
-

@@ -70,14 +70,50 @@
     </select>
 
     <select id="findById" resultType="map">
-        SELECT pr.*, fs.customer_id, fs.base_ym
+        SELECT pr.prediction_id AS predictionId,
+               fs.customer_id AS customerId,
+               fs.base_ym AS baseYm,
+               pr.input_hash AS inputHash,
+               pr.model_version AS modelVersion,
+               pr.feature_schema_version AS featureSchemaVersion,
+               pr.hazard_1m AS hazard1m,
+               pr.hazard_2m AS hazard2m,
+               pr.hazard_3m AS hazard3m,
+               pr.cumulative_risk_3m AS cumulativeRisk3m,
+               pr.risk_grade AS riskGradeName,
+               pr.percentile,
+               CAST(pr.reasons AS CHAR) AS reasons,
+               pr.explanation,
+               pr.llm_status AS llmStatus,
+               pr.llm_model AS llmModel,
+               pr.prompt_version AS promptVersion,
+               pr.llm_error_message AS llmErrorMessage,
+               pr.predicted_at AS predictedAt
         FROM prediction_result pr
         JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
         WHERE pr.prediction_id = #{predictionId}
     </select>
 
     <select id="findCurrent" resultType="map">
-        SELECT pr.*, fs.customer_id, fs.base_ym
+        SELECT pr.prediction_id AS predictionId,
+               fs.customer_id AS customerId,
+               fs.base_ym AS baseYm,
+               pr.input_hash AS inputHash,
+               pr.model_version AS modelVersion,
+               pr.feature_schema_version AS featureSchemaVersion,
+               pr.hazard_1m AS hazard1m,
+               pr.hazard_2m AS hazard2m,
+               pr.hazard_3m AS hazard3m,
+               pr.cumulative_risk_3m AS cumulativeRisk3m,
+               pr.risk_grade AS riskGradeName,
+               pr.percentile,
+               CAST(pr.reasons AS CHAR) AS reasons,
+               pr.explanation,
+               pr.llm_status AS llmStatus,
+               pr.llm_model AS llmModel,
+               pr.prompt_version AS promptVersion,
+               pr.llm_error_message AS llmErrorMessage,
+               pr.predicted_at AS predictedAt
         FROM prediction_result pr
         JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
         WHERE fs.customer_id = #{customerId}
@@ -100,7 +136,25 @@
     </select>
 
     <select id="findByInputHash" resultType="map">
-        SELECT pr.*, fs.customer_id, fs.base_ym
+        SELECT pr.prediction_id AS predictionId,
+               fs.customer_id AS customerId,
+               fs.base_ym AS baseYm,
+               pr.input_hash AS inputHash,
+               pr.model_version AS modelVersion,
+               pr.feature_schema_version AS featureSchemaVersion,
+               pr.hazard_1m AS hazard1m,
+               pr.hazard_2m AS hazard2m,
+               pr.hazard_3m AS hazard3m,
+               pr.cumulative_risk_3m AS cumulativeRisk3m,
+               pr.risk_grade AS riskGradeName,
+               pr.percentile,
+               CAST(pr.reasons AS CHAR) AS reasons,
+               pr.explanation,
+               pr.llm_status AS llmStatus,
+               pr.llm_model AS llmModel,
+               pr.prompt_version AS promptVersion,
+               pr.llm_error_message AS llmErrorMessage,
+               pr.predicted_at AS predictedAt
         FROM prediction_result pr
         JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
         WHERE pr.input_hash = #{inputHash}
@@ -121,4 +175,3 @@
         )
     </insert>
 </mapper>
-
