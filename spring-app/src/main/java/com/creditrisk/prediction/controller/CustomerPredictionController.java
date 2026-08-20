@@ -5,8 +5,16 @@ import com.creditrisk.common.web.QueryValidator;
 import com.creditrisk.common.web.RequestIds;
 import com.creditrisk.meta.service.MetaService;
 import com.creditrisk.prediction.dto.PredictionDetailResponse;
+import com.creditrisk.prediction.dto.PredictionCreateRequest;
+import com.creditrisk.prediction.dto.PredictionExecutionResponse;
+import com.creditrisk.prediction.service.PredictionCommandService;
 import com.creditrisk.prediction.service.PredictionQueryService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,13 +29,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class CustomerPredictionController {
 
     private final PredictionQueryService predictionQueryService;
+    private final PredictionCommandService predictionCommandService;
     private final MetaService metaService;
 
     /** 현재 예측 조회 서비스와 기준년월 서비스를 주입받는다. */
     public CustomerPredictionController(
             PredictionQueryService predictionQueryService,
+            PredictionCommandService predictionCommandService,
             MetaService metaService) {
         this.predictionQueryService = predictionQueryService;
+        this.predictionCommandService = predictionCommandService;
         this.metaService = metaService;
     }
 
@@ -45,5 +56,24 @@ public class CustomerPredictionController {
         PredictionDetailResponse response = predictionQueryService.getCurrent(customerId, resolvedBaseYm);
         return ApiResponse.success(response, RequestIds.from(request));
     }
-}
 
+    /**
+     * 고객의 기준월 피처로 신규 예측을 실행하거나 동일 입력 결과를 재사용한다.
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<PredictionExecutionResponse>> createPrediction(
+            @PathVariable String customerId,
+            @Valid @RequestBody PredictionCreateRequest createRequest,
+            HttpServletRequest request) {
+        String requestId = RequestIds.from(request);
+        PredictionExecutionResponse response = predictionCommandService.execute(
+                customerId,
+                createRequest.baseYm(),
+                createRequest.shouldGenerateExplanation(),
+                requestId);
+        // 신규 저장은 201, 입력 해시 재사용은 200으로 반환한다.
+        HttpStatus status = response.reused() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status)
+                .body(ApiResponse.success(response, requestId));
+    }
+}

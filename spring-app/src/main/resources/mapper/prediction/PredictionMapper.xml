@@ -49,7 +49,7 @@
                END AS riskGrade,
                pr.risk_grade AS riskGradeName,
                pr.model_version AS modelVersion,
-               pr.feature_schema_version AS featureSchemaVersion,
+               fs.feature_schema_version AS featureSchemaVersion,
                pr.llm_status AS llmStatus,
                pr.llm_model AS llmModel,
                pr.prompt_version AS promptVersion
@@ -75,7 +75,7 @@
                fs.base_ym AS baseYm,
                pr.input_hash AS inputHash,
                pr.model_version AS modelVersion,
-               pr.feature_schema_version AS featureSchemaVersion,
+               fs.feature_schema_version AS featureSchemaVersion,
                pr.hazard_1m AS hazard1m,
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
@@ -100,7 +100,7 @@
                fs.base_ym AS baseYm,
                pr.input_hash AS inputHash,
                pr.model_version AS modelVersion,
-               pr.feature_schema_version AS featureSchemaVersion,
+               fs.feature_schema_version AS featureSchemaVersion,
                pr.hazard_1m AS hazard1m,
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
@@ -141,7 +141,7 @@
                fs.base_ym AS baseYm,
                pr.input_hash AS inputHash,
                pr.model_version AS modelVersion,
-               pr.feature_schema_version AS featureSchemaVersion,
+               fs.feature_schema_version AS featureSchemaVersion,
                pr.hazard_1m AS hazard1m,
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
@@ -163,12 +163,12 @@
 
     <insert id="insertPrediction" parameterType="map" useGeneratedKeys="true" keyProperty="predictionId">
         INSERT INTO prediction_result (
-            feature_snapshot_id, input_hash, model_version, feature_schema_version,
+            feature_snapshot_id, input_hash, model_version,
             hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m,
             risk_grade, percentile, reasons, explanation, recommendation,
             llm_status, llm_model, prompt_version, llm_error_message, predicted_at
         ) VALUES (
-            #{featureSnapshotId}, #{inputHash}, #{modelVersion}, #{featureSchemaVersion},
+            #{featureSnapshotId}, #{inputHash}, #{modelVersion},
             #{hazard1m}, #{hazard2m}, #{hazard3m}, #{cumulativeRisk3m},
             #{riskGradeName}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, NULL,
             #{llmStatus}, #{llmModel}, #{promptVersion}, #{llmErrorMessage}, #{predictedAt}
