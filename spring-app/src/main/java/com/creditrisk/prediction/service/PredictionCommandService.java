@@ -1,5 +1,6 @@
 package com.creditrisk.prediction.service;
 
+import com.creditrisk.common.domain.LlmStatus;
 import com.creditrisk.common.exception.BusinessException;
 import com.creditrisk.customer.service.CustomerDetailService;
 import com.creditrisk.prediction.client.AiPredictionClient;
@@ -226,7 +227,6 @@ public class PredictionCommandService {
         values.put("featureSnapshotId", response.get("featureSnapshotId"));
         values.put("inputHash", inputHash);
         values.put("modelVersion", response.get("modelVersion"));
-        values.put("featureSchemaVersion", response.get("featureSchemaVersion"));
         values.put("hazard1m", prediction.get("hazard1m"));
         values.put("hazard2m", prediction.get("hazard2m"));
         values.put("hazard3m", prediction.get("hazard3m"));
@@ -235,12 +235,23 @@ public class PredictionCommandService {
         values.put("percentile", prediction.get("percentile"));
         values.put("reasons", writeJson(riskFactors));
         values.put("explanation", response.get("explanation"));
-        values.put("llmStatus", llm.getOrDefault("status", "FAILED"));
+        values.put("llmStatus", llmStatusName(llm));
         values.put("llmModel", llm.get("model"));
         values.put("promptVersion", llm.getOrDefault("promptVersion", promptVersion));
         values.put("llmErrorMessage", llm.get("errorMessage"));
         values.put("predictedAt", Timestamp.from(parseInstant(response.get("predictedAt"))));
         return values;
+    }
+
+    /** AI 응답 상태를 DB enum 문자열로 제한한다. */
+    private String llmStatusName(Map<String, Object> llm) {
+        try {
+            return LlmStatus.valueOf(
+                    String.valueOf(llm.getOrDefault("status", LlmStatus.FAILED.name())))
+                    .name();
+        } catch (IllegalArgumentException exception) {
+            throw invalidAiResponse("AI 서버 LLM 상태가 올바르지 않습니다.");
+        }
     }
 
     /** API 위험등급 코드를 DB 한글값으로 변환한다. */
@@ -281,4 +292,3 @@ public class PredictionCommandService {
                 Map.of());
     }
 }
-
