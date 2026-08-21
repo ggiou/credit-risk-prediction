@@ -14,6 +14,9 @@ public final class QueryValidator {
 
     private static final Pattern BASE_YM_PATTERN = Pattern.compile("^(19|20)\\d{2}(0[1-9]|1[0-2])$");
 
+    /**
+     * 정적 검증 유틸리티 클래스의 외부 인스턴스 생성을 막는다.
+     */
     private QueryValidator() {
         // 인스턴스를 만들 필요가 없는 정적 유틸리티 클래스다.
     }
@@ -67,4 +70,3 @@ public final class QueryValidator {
                 Map.of("field", field, "value", String.valueOf(value)));
     }
 }
-

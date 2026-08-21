@@ -68,6 +68,7 @@ public class CustomerService {
                 maxRiskRate,
                 page,
                 size,
+                page * size,
                 sortParts[0],
                 sortParts[1].toUpperCase(),
                 modelVersion);
@@ -130,4 +131,3 @@ public class CustomerService {
         return value instanceof Timestamp timestamp ? timestamp.toInstant() : null;
     }
 }
-

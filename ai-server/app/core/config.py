@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_prefix="AI_",
         extra="ignore",
+        protected_namespaces=("settings_",),
     )
 
 
@@ -31,4 +32,3 @@ def get_settings() -> Settings:
 
     # 요청마다 환경변수를 다시 읽지 않도록 프로세스 단위로 캐시한다.
     return Settings()
-
