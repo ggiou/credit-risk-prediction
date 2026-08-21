@@ -1,6 +1,14 @@
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">M</span><div><strong>미리봄</strong><small>Credit Risk BO</small></div></div>
+    <div class="brand">
+    <span class="brand-mark">
+        <img src="/images/logo.png" alt="서비스 로고">
+    </span>
+        <div>
+            <strong>미리봄</strong>
+            <small>Credit Risk BO</small>
+        </div>
+    </div>
     <nav>
         <a class="nav-item ${menu eq 'dashboard' ? 'active' : ''}" href="${pageContext.request.contextPath}/">대시보드</a>
         <p class="nav-group">고객 관리</p>

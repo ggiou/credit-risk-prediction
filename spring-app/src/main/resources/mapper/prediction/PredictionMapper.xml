@@ -51,7 +51,6 @@
                pr.model_version AS modelVersion,
                fs.feature_schema_version AS featureSchemaVersion,
                pr.llm_status AS llmStatus,
-               pr.llm_model AS llmModel,
                pr.prompt_version AS promptVersion
         <include refid="historyFrom"/>
         <include refid="historyWhere"/>
@@ -85,7 +84,6 @@
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
                pr.llm_status AS llmStatus,
-               pr.llm_model AS llmModel,
                pr.prompt_version AS promptVersion,
                pr.llm_error_message AS llmErrorMessage,
                pr.predicted_at AS predictedAt
@@ -110,7 +108,6 @@
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
                pr.llm_status AS llmStatus,
-               pr.llm_model AS llmModel,
                pr.prompt_version AS promptVersion,
                pr.llm_error_message AS llmErrorMessage,
                pr.predicted_at AS predictedAt
@@ -151,7 +148,6 @@
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
                pr.llm_status AS llmStatus,
-               pr.llm_model AS llmModel,
                pr.prompt_version AS promptVersion,
                pr.llm_error_message AS llmErrorMessage,
                pr.predicted_at AS predictedAt
@@ -166,12 +162,12 @@
             feature_snapshot_id, input_hash, model_version,
             hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m,
             risk_grade, percentile, reasons, explanation, recommendation,
-            llm_status, llm_model, prompt_version, llm_error_message, predicted_at
+            llm_status, prompt_version, llm_error_message, predicted_at
         ) VALUES (
             #{featureSnapshotId}, #{inputHash}, #{modelVersion},
             #{hazard1m}, #{hazard2m}, #{hazard3m}, #{cumulativeRisk3m},
             #{riskGradeName}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, NULL,
-            #{llmStatus}, #{llmModel}, #{promptVersion}, #{llmErrorMessage}, #{predictedAt}
+            #{llmStatus}, #{promptVersion}, #{llmErrorMessage}, #{predictedAt}
         )
     </insert>
 </mapper>

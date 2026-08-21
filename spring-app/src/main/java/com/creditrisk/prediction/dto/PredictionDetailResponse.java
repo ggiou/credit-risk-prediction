@@ -35,9 +35,7 @@ public record PredictionDetailResponse(
     /** LLM 설명 생성 상태와 버전 정보다. */
     public record Llm(
             String status,
-            String model,
             String promptVersion,
             String errorMessage) {
     }
 }
-

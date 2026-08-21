@@ -124,7 +124,6 @@ def predict(request: PredictRequest) -> PredictResponse:
     explanation = None
     used_feature_keys: list[str] = []
     llm_error = None
-    llm_model = None
 
     if request.generateExplanation:
         llm = get_llm()
@@ -140,12 +139,10 @@ def predict(request: PredictRequest) -> PredictResponse:
             explanation = llm_result.explanation
             used_feature_keys = llm_result.used_feature_keys
             llm_error = llm_result.error_message
-            llm_model = settings.openai_model
 
     input_hash = prediction_input_hash(
         model_version=model.model_version,
         feature_schema_version=request.featureSchemaVersion,
-        llm_model=settings.openai_model,
         prompt_version=request.promptVersion,
         generate_explanation=request.generateExplanation,
         current_features=request.currentFeatures,
@@ -165,7 +162,6 @@ def predict(request: PredictRequest) -> PredictResponse:
         usedFeatureKeys=used_feature_keys,
         llm=LlmMeta(
             status=llm_status,
-            model=llm_model,
             promptVersion=request.promptVersion,
             errorMessage=llm_error,
         ),

@@ -18,7 +18,5 @@ public record PredictionHistoryItem(
         String modelVersion,
         String featureSchemaVersion,
         String llmStatus,
-        String llmModel,
         String promptVersion) {
 }
-

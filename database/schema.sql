@@ -118,7 +118,6 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     recommendation TEXT NULL COMMENT '현재 MVP에서 사용하지 않음',
     llm_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUESTED'
         COMMENT 'LLM 설명 생성 상태: NOT_REQUESTED=요청 전, COMPLETED=생성 완료, FAILED=생성 실패',
-    llm_model VARCHAR(100) NULL,
     prompt_version VARCHAR(32) NULL,
     llm_error_message VARCHAR(500) NULL,
     predicted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
