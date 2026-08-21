@@ -15,12 +15,6 @@ public record PredictionHistoryCondition(
         Instant predictedTo,
         int page,
         int size,
+        int offset,
         String sortDirection) {
-
-    /** 페이지 시작 위치를 반환한다. */
-    public int offset() {
-        // 0 기반 페이지 번호를 MySQL OFFSET으로 변환한다.
-        return page * size;
-    }
 }
-

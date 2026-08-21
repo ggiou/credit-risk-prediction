@@ -14,14 +14,8 @@ public record CustomerSearchCondition(
         Double maxRiskRate,
         int page,
         int size,
+        int offset,
         String sortField,
         String sortDirection,
         String modelVersion) {
-
-    /** 조회 시작 위치를 계산한다. */
-    public int offset() {
-        // MySQL LIMIT 절에서 사용할 0 기반 시작 위치다.
-        return page * size;
-    }
 }
-

@@ -48,6 +48,7 @@ public class PredictionHistoryService {
                 predictedTo,
                 page,
                 size,
+                page * size,
                 sort.split(",")[1].toUpperCase());
 
         List<PredictionHistoryItem> items = predictionMapper.findHistory(condition).stream()
