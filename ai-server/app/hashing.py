@@ -19,7 +19,6 @@ def prediction_input_hash(
     *,
     model_version: str,
     feature_schema_version: str,
-    llm_model: str,
     prompt_version: str,
     generate_explanation: bool,
     current_features: dict[str, Any],
@@ -29,7 +28,6 @@ def prediction_input_hash(
         [
             model_version,
             feature_schema_version,
-            llm_model,
             prompt_version,
             "true" if generate_explanation else "false",
             canonical_json(current_features),

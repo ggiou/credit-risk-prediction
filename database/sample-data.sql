@@ -87,7 +87,7 @@ ON DUPLICATE KEY UPDATE features = VALUES(features), calculated_at = CURRENT_TIM
 INSERT INTO prediction_result (
     feature_snapshot_id, input_hash, model_version,
     hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m, risk_grade, percentile,
-    reasons, explanation, llm_status, llm_model, prompt_version, predicted_at
+    reasons, explanation, llm_status, prompt_version, predicted_at
 )
 SELECT feature_snapshot_id,
        SHA2(CONCAT(customer_id, base_ym, '-demo'), 256),
@@ -110,7 +110,7 @@ SELECT feature_snapshot_id,
            WHEN 'SYN_123' THEN '카드 한도 사용률과 현금서비스 잔액이 전월보다 증가했습니다. 제공된 지표 변화가 향후 연체 위험 증가 요인으로 반영됐습니다.'
            ELSE '현재 제공된 카드 이용 및 상환 지표에서 큰 위험 변화는 확인되지 않았습니다.'
        END,
-       'COMPLETED', 'development-template', 'v1.0', CURRENT_TIMESTAMP
+       'COMPLETED', 'v1.0', CURRENT_TIMESTAMP
 FROM feature_snapshot
 WHERE base_ym = '201812'
 ON DUPLICATE KEY UPDATE predicted_at = VALUES(predicted_at);

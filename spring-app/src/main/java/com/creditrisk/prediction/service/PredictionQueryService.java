@@ -87,7 +87,6 @@ public class PredictionQueryService {
                 nullableString(row.get("explanation")),
                 new PredictionDetailResponse.Llm(
                         llmStatus,
-                        nullableString(row.get("llmModel")),
                         nullableString(row.get("promptVersion")),
                         nullableString(row.get("llmErrorMessage"))),
                 stringValue(row.get("inputHash")),
@@ -161,4 +160,3 @@ public class PredictionQueryService {
         return value instanceof Instant instant ? instant : null;
     }
 }
-
