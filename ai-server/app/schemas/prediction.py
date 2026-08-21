@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class PredictionRequest(BaseModel):
     """현재·이전 월 피처와 예측 실행 옵션이다."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     request_id: str = Field(alias="requestId", min_length=1, max_length=100)
     customer_id: str = Field(alias="customerId", min_length=1, max_length=32)
@@ -38,7 +38,7 @@ class PredictionRequest(BaseModel):
 class RiskFactor(BaseModel):
     """위험도에 영향을 준 피처의 값과 변화량이다."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     feature_key: str = Field(alias="featureKey")
     display_name: str = Field(alias="displayName")
@@ -54,7 +54,7 @@ class RiskFactor(BaseModel):
 class PredictionValues(BaseModel):
     """LightGBM이 계산한 기간별 위험률과 등급이다."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     hazard_1m: float = Field(alias="hazard1m", ge=0, le=1)
     hazard_2m: float = Field(alias="hazard2m", ge=0, le=1)
@@ -67,7 +67,7 @@ class PredictionValues(BaseModel):
 class LlmResult(BaseModel):
     """LLM 설명 생성 상태와 실패 사유다."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     status: Literal["NOT_REQUESTED", "COMPLETED", "FAILED"]
     model: str | None
@@ -78,7 +78,7 @@ class LlmResult(BaseModel):
 class PredictionResponse(BaseModel):
     """Spring Boot에 반환할 최종 예측 결과다."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     request_id: str = Field(alias="requestId")
     customer_id: str = Field(alias="customerId")
@@ -93,4 +93,3 @@ class PredictionResponse(BaseModel):
     llm: LlmResult
     input_hash: str = Field(alias="inputHash")
     predicted_at: datetime = Field(alias="predictedAt")
-

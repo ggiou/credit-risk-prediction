@@ -1,0 +1,57 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: credit_risk
+      MYSQL_USER: spring_app
+      MYSQL_PASSWORD: local-password
+      MYSQL_ROOT_PASSWORD: local-root-password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/sample-data.sql:/docker-entrypoint-initdb.d/02-sample-data.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-plocal-root-password"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ai-server:
+    build: ./ai-server
+    environment:
+      AI_MODEL_VERSION: miribom-lgbm-v0.3
+      AI_FEATURE_SCHEMA_VERSION: v1
+      # 로컬 화면 연동 확인용이며 실제 제출·평가 환경에서는 false로 두고 모델 파일을 배치한다.
+      AI_ALLOW_RULE_BASED_FALLBACK: "true"
+      AI_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_OPENAI_MODEL: ${OPENAI_MODEL:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-server/models:/app/models:ro
+
+  spring-app:
+    build:
+      context: .
+      dockerfile: spring-app/Dockerfile
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: credit_risk
+      DB_USERNAME: spring_app
+      DB_PASSWORD: local-password
+      DB_SSL_MODE: DISABLED
+      AI_SERVER_BASE_URL: http://ai-server:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      ai-server:
+        condition: service_started
+
+volumes:
+  mysql-data:
+
