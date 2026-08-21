@@ -7,7 +7,7 @@ server:
 
 spring:
   config:
-    import: file:../config/application-secret.yml
+    import: file:./config/application-secret.yml
 
   application:
     name: credit-risk-prediction
