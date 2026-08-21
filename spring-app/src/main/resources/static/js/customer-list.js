@@ -1,0 +1,27 @@
+/** 고객 목록 검색, 페이지 이동, 상세 진입을 처리한다. */
+let currentPage = 0;
+let lastPage = 0;
+
+document.addEventListener("DOMContentLoaded", async () => {
+    try {
+        await BO.loadBaseMonths(document.getElementById("baseYmSelect"));
+        const query = new URLSearchParams(location.search);
+        ["customerId", "riskGrade", "analysisStatus"].forEach(id => { if (query.get(id)) document.getElementById(id).value = query.get(id); });
+        document.getElementById("searchForm").addEventListener("submit", event => { event.preventDefault(); currentPage = 0; search().catch(BO.showError); });
+        document.getElementById("prevPage").addEventListener("click", () => { if (currentPage > 0) { currentPage--; search().catch(BO.showError); } });
+        document.getElementById("nextPage").addEventListener("click", () => { if (currentPage + 1 < lastPage) { currentPage++; search().catch(BO.showError); } });
+        await search();
+    } catch (error) { BO.showError(error); }
+});
+
+/** 현재 검색폼 조건으로 고객 페이지를 조회한다. */
+async function search() {
+    const params = new URLSearchParams({baseYm: document.getElementById("baseYmSelect").value, page: currentPage, size: 20});
+    ["customerId", "riskGrade", "analysisStatus"].forEach(id => { const value = document.getElementById(id).value.trim(); if (value) params.set(id, value); });
+    const data = await BO.request(`/api/v1/customers?${params}`);
+    lastPage = data.totalPages;
+    document.getElementById("totalCount").textContent = `${BO.number(data.totalElements)}명`;
+    document.getElementById("pageInfo").textContent = `${data.totalPages ? data.page + 1 : 0} / ${data.totalPages}`;
+    document.getElementById("customerTable").innerHTML = data.items.map(item => `<tr onclick="location.href='/customers/${BO.escape(item.customerId)}/summary?baseYm=${item.baseYm}'"><td>${BO.escape(item.customerId)}</td><td>${item.baseYm}</td><td>${item.analysisStatus}</td><td><span class="badge">${BO.escape(item.riskGradeName || '-')}</span></td><td>${BO.percent(item.hazard1m)}</td><td>${BO.percent(item.hazard2m)}</td><td>${BO.percent(item.hazard3m)}</td><td>${BO.escape(item.primaryRiskFactor || '-')}</td></tr>`).join("") || '<tr><td colspan="8">조회 결과가 없습니다.</td></tr>';
+}
+

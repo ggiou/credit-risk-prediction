@@ -8,6 +8,9 @@ import jakarta.servlet.http.HttpServletRequest;
  */
 public final class RequestIds {
 
+    /**
+     * 정적 유틸리티 클래스의 외부 인스턴스 생성을 막는다.
+     */
     private RequestIds() {
         // 인스턴스를 만들 필요가 없는 정적 유틸리티 클래스다.
     }
@@ -23,4 +26,3 @@ public final class RequestIds {
         return String.valueOf(request.getAttribute(RequestIdFilter.ATTRIBUTE_NAME));
     }
 }
-

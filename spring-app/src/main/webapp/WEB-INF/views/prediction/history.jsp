@@ -1,0 +1,8 @@
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<!DOCTYPE html><html lang="ko"><head><jsp:include page="../common/head.jsp"/></head>
+<body data-page="prediction-history"><jsp:include page="../common/sidebar.jsp"/><div class="app-shell"><jsp:include page="../common/header.jsp"/><main>
+<div class="page-title"><div><h1>예측 이력</h1><p>저장된 과거 분석 결과와 모델 버전을 확인합니다.</p></div></div>
+<form id="historyForm" class="filter-panel"><label>고객번호<input id="customerId" placeholder="SYN_123"></label><label>기준월<select id="baseYmSelect"><option value="">전체</option></select></label><label>위험등급<select id="riskGrade"><option value="">전체</option><option value="NORMAL">정상</option><option value="INTEREST">관심</option><option value="CAUTION">주의</option><option value="WARNING">경고</option></select></label><label>LLM 상태<select id="llmStatus"><option value="">전체</option><option value="COMPLETED">완료</option><option value="FAILED">실패</option><option value="NOT_REQUESTED">미요청</option></select></label><button class="primary" type="submit">검색</button></form>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th>분석일시</th><th>고객번호</th><th>기준월</th><th>1개월</th><th>2개월</th><th>3개월</th><th>등급</th><th>모델</th><th>LLM</th></tr></thead><tbody id="historyTable"></tbody></table></div></section><p id="pageError" class="error-message" hidden></p>
+</main></div><script src="${pageContext.request.contextPath}/js/api.js"></script><script src="${pageContext.request.contextPath}/js/prediction-history.js"></script></body></html>
+

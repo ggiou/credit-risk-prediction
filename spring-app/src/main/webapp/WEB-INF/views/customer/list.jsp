@@ -1,0 +1,9 @@
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<!DOCTYPE html><html lang="ko"><head><jsp:include page="../common/head.jsp"/></head>
+<body data-page="customer-list"><jsp:include page="../common/sidebar.jsp"/><div class="app-shell"><jsp:include page="../common/header.jsp"/><main>
+<div class="page-title"><div><h1>고객 목록</h1><p>고객번호와 위험 조건으로 분석 대상을 찾습니다.</p></div></div>
+<form id="searchForm" class="filter-panel"><label>고객번호<input id="customerId" placeholder="SYN_123"></label><label>기준월<select id="baseYmSelect"></select></label><label>위험등급<select id="riskGrade"><option value="">전체</option><option value="NORMAL">정상</option><option value="INTEREST">관심</option><option value="CAUTION">주의</option><option value="WARNING">경고</option></select></label><label>분석 상태<select id="analysisStatus"><option value="">전체</option><option value="NOT_ANALYZED">미분석</option><option value="COMPLETED">완료</option><option value="PARTIAL">부분 완료</option></select></label><button class="primary" type="submit">검색</button></form>
+<section class="panel"><div class="panel-title"><h2>검색 결과</h2><span id="totalCount">0명</span></div><div class="table-wrap"><table><thead><tr><th>고객번호</th><th>기준월</th><th>상태</th><th>등급</th><th>1개월</th><th>2개월</th><th>3개월</th><th>주요 요인</th></tr></thead><tbody id="customerTable"></tbody></table></div><div class="pagination"><button id="prevPage">이전</button><span id="pageInfo">1 / 1</span><button id="nextPage">다음</button></div></section>
+<p id="pageError" class="error-message" hidden></p></main></div>
+<script src="${pageContext.request.contextPath}/js/api.js"></script><script src="${pageContext.request.contextPath}/js/customer-list.js"></script></body></html>
+
