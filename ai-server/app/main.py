@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, status
 
 from .config import settings
 from .hashing import prediction_input_hash
+from .llm import RiskExplanationClient
 from .model_bundle import ModelBundle, ModelContractError
 from .schemas import LlmMeta, PredictRequest, PredictResponse, PredictionValues
 
@@ -27,6 +28,17 @@ def get_model() -> ModelBundle:
     return ModelBundle.from_path(
         settings.model_path,
         expected_sha256=settings.expected_model_sha256,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_llm() -> RiskExplanationClient | None:
+    if not settings.openai_api_key:
+        return None
+    return RiskExplanationClient(
+        api_key=settings.openai_api_key,
+        model=settings.openai_model,
+        timeout_seconds=settings.llm_timeout_seconds,
     )
 
 
@@ -75,6 +87,14 @@ def predict(request: PredictRequest) -> PredictResponse:
                 f"expected={request.expectedModelVersion}, actual={model.model_version}"
             ),
         )
+    if request.promptVersion != settings.prompt_version:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "promptVersion mismatch: "
+                f"expected={settings.prompt_version}, actual={request.promptVersion}"
+            ),
+        )
 
     try:
         prediction, contributions, enriched = model.predict(
@@ -90,6 +110,37 @@ def predict(request: PredictRequest) -> PredictResponse:
         )
     except (ModelContractError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    prediction_body = {
+        "hazard1m": prediction.hazard_1m,
+        "hazard2m": prediction.hazard_2m,
+        "hazard3m": prediction.hazard_3m,
+        "cumulativeRisk3m": prediction.cumulative_risk_3m,
+        "riskGrade": prediction.risk_grade,
+        "percentile": prediction.percentile,
+    }
+
+    llm_status = "NOT_REQUESTED"
+    explanation = None
+    used_feature_keys: list[str] = []
+    llm_error = None
+    llm_model = None
+
+    if request.generateExplanation:
+        llm = get_llm()
+        if llm is None:
+            llm_status = "FAILED"
+            llm_error = "OPENAI_API_KEY is not configured"
+        else:
+            llm_result = llm.generate(
+                prediction=prediction_body,
+                risk_factors=risk_factors,
+            )
+            llm_status = llm_result.status
+            explanation = llm_result.explanation
+            used_feature_keys = llm_result.used_feature_keys
+            llm_error = llm_result.error_message
+            llm_model = settings.openai_model
 
     input_hash = prediction_input_hash(
         model_version=model.model_version,
@@ -108,22 +159,15 @@ def predict(request: PredictRequest) -> PredictResponse:
         featureSnapshotId=request.featureSnapshotId,
         featureSchemaVersion=request.featureSchemaVersion,
         modelVersion=model.model_version,
-        prediction=PredictionValues(
-            hazard1m=prediction.hazard_1m,
-            hazard2m=prediction.hazard_2m,
-            hazard3m=prediction.hazard_3m,
-            cumulativeRisk3m=prediction.cumulative_risk_3m,
-            riskGrade=prediction.risk_grade,
-            percentile=prediction.percentile,
-        ),
+        prediction=PredictionValues(**prediction_body),
         riskFactors=risk_factors,
-        explanation=None,
-        usedFeatureKeys=[],
+        explanation=explanation,
+        usedFeatureKeys=used_feature_keys,
         llm=LlmMeta(
-            status="NOT_REQUESTED",
-            model=None,
+            status=llm_status,
+            model=llm_model,
             promptVersion=request.promptVersion,
-            errorMessage=None,
+            errorMessage=llm_error,
         ),
         inputHash=input_hash,
         predictedAt=datetime.now(timezone.utc),
