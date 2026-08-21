@@ -11,6 +11,11 @@ public enum RiskGrade {
 
     private final String displayName;
 
+    /**
+     * API 위험등급과 BO 한글 표시명을 연결한다.
+     *
+     * @param displayName 화면과 DB에서 사용하는 한글 등급명
+     */
     RiskGrade(String displayName) {
         this.displayName = displayName;
     }
@@ -20,4 +25,3 @@ public enum RiskGrade {
         return displayName;
     }
 }
-
