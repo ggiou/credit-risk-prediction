@@ -45,7 +45,6 @@ class RiskFactor(BaseModel):
 
 class LlmMeta(BaseModel):
     status: Literal["NOT_REQUESTED", "COMPLETED", "FAILED"]
-    model: str | None = None
     promptVersion: str
     errorMessage: str | None = None
 

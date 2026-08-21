@@ -70,7 +70,6 @@ class LlmResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     status: Literal["NOT_REQUESTED", "COMPLETED", "FAILED"]
-    model: str | None
     prompt_version: str = Field(alias="promptVersion")
     error_message: str | None = Field(alias="errorMessage")
 

@@ -73,7 +73,6 @@ public class PredictionHistoryService {
                 stringValue(row.get("modelVersion")),
                 stringValue(row.get("featureSchemaVersion")),
                 stringValue(row.get("llmStatus")),
-                nullableString(row.get("llmModel")),
                 nullableString(row.get("promptVersion")));
     }
 

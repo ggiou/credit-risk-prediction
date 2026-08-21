@@ -236,7 +236,6 @@ public class PredictionCommandService {
         values.put("reasons", writeJson(riskFactors));
         values.put("explanation", response.get("explanation"));
         values.put("llmStatus", llmStatusName(llm));
-        values.put("llmModel", llm.get("model"));
         values.put("promptVersion", llm.getOrDefault("promptVersion", promptVersion));
         values.put("llmErrorMessage", llm.get("errorMessage"));
         values.put("predictedAt", Timestamp.from(parseInstant(response.get("predictedAt"))));

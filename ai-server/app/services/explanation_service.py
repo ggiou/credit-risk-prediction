@@ -34,7 +34,6 @@ class ExplanationService:
         if not generate:
             return None, [], LlmResult(
                 status="NOT_REQUESTED",
-                model=None,
                 promptVersion=prompt_version,
                 errorMessage=None,
             )
@@ -42,7 +41,6 @@ class ExplanationService:
             # 설정 누락을 성공처럼 숨기지 않고 부분 성공으로 저장할 수 있게 FAILED를 반환한다.
             return None, [], LlmResult(
                 status="FAILED",
-                model=self.settings.openai_model,
                 promptVersion=prompt_version,
                 errorMessage="OPENAI_API_KEY 또는 OPENAI_MODEL이 설정되지 않았습니다.",
             )
@@ -56,7 +54,6 @@ class ExplanationService:
                 raise ValueError("LLM 설명이 비어 있습니다.")
             return explanation, used_keys, LlmResult(
                 status="COMPLETED",
-                model=self.settings.openai_model,
                 promptVersion=prompt_version,
                 errorMessage=None,
             )
@@ -64,7 +61,6 @@ class ExplanationService:
             # LLM 실패는 LightGBM 위험률을 버리지 않고 Spring이 PARTIAL로 저장하도록 상태만 반환한다.
             return None, [], LlmResult(
                 status="FAILED",
-                model=self.settings.openai_model,
                 promptVersion=prompt_version,
                 errorMessage=str(exception)[:500],
             )
