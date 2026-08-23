@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 신규 분석 또는 입력 해시 기반 재사용 결과를 전달한다.
+ * 신규 분석 또는 피처 스냅샷·모델 기반 재사용 결과를 전달한다.
  */
 public record PredictionExecutionResponse(
         long predictionId,
@@ -19,7 +19,6 @@ public record PredictionExecutionResponse(
         List<Map<String, Object>> riskFactors,
         String explanation,
         PredictionDetailResponse.Llm llm,
-        String inputHash,
         Instant predictedAt) {
 
     /** 저장 예측 상세에 이번 요청의 재사용 여부를 추가한다. */
@@ -37,8 +36,6 @@ public record PredictionExecutionResponse(
                 detail.riskFactors(),
                 detail.explanation(),
                 detail.llm(),
-                detail.inputHash(),
                 detail.predictedAt());
     }
 }
-
