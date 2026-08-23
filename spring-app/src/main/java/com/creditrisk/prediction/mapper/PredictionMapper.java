@@ -34,10 +34,11 @@ public interface PredictionMapper {
             @Param("baseYm") String baseYm,
             @Param("previousBaseYm") String previousBaseYm);
 
-    /** 동일 입력 해시로 저장된 예측 결과를 조회한다. */
-    Map<String, Object> findByInputHash(@Param("inputHash") String inputHash);
+    /** 동일 피처 스냅샷과 모델 버전으로 저장된 예측 결과를 조회한다. */
+    Map<String, Object> findByFeatureSnapshotAndModel(
+            @Param("featureSnapshotId") long featureSnapshotId,
+            @Param("modelVersion") String modelVersion);
 
     /** FastAPI 검증이 끝난 예측 결과를 저장한다. */
     int insertPrediction(Map<String, Object> values);
 }
-

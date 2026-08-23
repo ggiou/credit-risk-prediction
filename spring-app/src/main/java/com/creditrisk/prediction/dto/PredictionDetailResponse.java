@@ -18,7 +18,6 @@ public record PredictionDetailResponse(
         List<Map<String, Object>> riskFactors,
         String explanation,
         Llm llm,
-        String inputHash,
         Instant predictedAt) {
 
     /** 모델이 계산한 기간별 위험률과 등급이다. */
@@ -35,7 +34,6 @@ public record PredictionDetailResponse(
     /** LLM 설명 생성 상태와 버전 정보다. */
     public record Llm(
             String status,
-            String promptVersion,
-            String errorMessage) {
+            String promptVersion) {
     }
 }

@@ -82,15 +82,14 @@ VALUES
         '잔액_현금서비스_B0M', 150000, '잔액_카드론_B0M', 200000,
         '잔액_리볼빙일시불이월_B0M', 80000, '이용가능카드수_신용', 2, '유효카드수_신용', 2
     ))
-ON DUPLICATE KEY UPDATE features = VALUES(features), calculated_at = CURRENT_TIMESTAMP;
+ON DUPLICATE KEY UPDATE feature_snapshot_id = feature_snapshot_id;
 
 INSERT INTO prediction_result (
-    feature_snapshot_id, input_hash, model_version,
+    feature_snapshot_id, model_version,
     hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m, risk_grade, percentile,
     reasons, explanation, llm_status, prompt_version, predicted_at
 )
 SELECT feature_snapshot_id,
-       SHA2(CONCAT(customer_id, base_ym, '-demo'), 256),
        'miribom-lgbm-v0.3',
        CASE customer_id WHEN 'SYN_123' THEN 0.481 WHEN 'SYN_789' THEN 0.214 ELSE 0.082 END,
        CASE customer_id WHEN 'SYN_123' THEN 0.624 WHEN 'SYN_789' THEN 0.296 ELSE 0.124 END,

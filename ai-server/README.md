@@ -68,7 +68,7 @@ The POST contract follows `credit_risk_api_spec.md`:
 - optionally receives previous-month features;
 - calculates 11 derived features using the fixed Python formulas;
 - runs the same model at `horizon=1,2,3`;
-- returns risk rates, grade, percentile, local risk factors, input hash;
+- returns risk rates, grade, percentile, and local risk factors;
 - makes at most one successful LLM explanation call (one retry only for failure);
 - keeps LightGBM results even when the LLM fails.
 

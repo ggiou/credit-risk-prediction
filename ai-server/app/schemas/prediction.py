@@ -90,5 +90,4 @@ class PredictionResponse(BaseModel):
     explanation: str | None
     used_feature_keys: list[str] = Field(alias="usedFeatureKeys")
     llm: LlmResult
-    input_hash: str = Field(alias="inputHash")
     predicted_at: datetime = Field(alias="predictedAt")

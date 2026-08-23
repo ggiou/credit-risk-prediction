@@ -58,7 +58,7 @@ public class CustomerPredictionController {
     }
 
     /**
-     * 고객의 기준월 피처로 신규 예측을 실행하거나 동일 입력 결과를 재사용한다.
+     * 고객의 기준월 피처로 신규 예측을 실행하거나 동일 스냅샷·모델 결과를 재사용한다.
      */
     @PostMapping
     public ResponseEntity<ApiResponse<PredictionExecutionResponse>> createPrediction(
@@ -71,7 +71,7 @@ public class CustomerPredictionController {
                 createRequest.baseYm(),
                 createRequest.shouldGenerateExplanation(),
                 requestId);
-        // 신규 저장은 201, 입력 해시 재사용은 200으로 반환한다.
+        // 신규 저장은 201, 동일 스냅샷·모델 결과 재사용은 200으로 반환한다.
         HttpStatus status = response.reused() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status)
                 .body(ApiResponse.success(response, requestId));

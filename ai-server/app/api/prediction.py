@@ -1,7 +1,5 @@
 """Spring Boot 전용 내부 예측 API를 제공한다."""
 
-import hashlib
-import json
 from datetime import datetime, timezone
 from functools import lru_cache
 
@@ -86,7 +84,6 @@ async def predict(
         request.prompt_version,
         request.generate_explanation,
     )
-    input_hash = calculate_input_hash(request, settings.model_version)
     return PredictionResponse(
         requestId=request.request_id,
         customerId=request.customer_id,
@@ -99,22 +96,5 @@ async def predict(
         explanation=explanation,
         usedFeatureKeys=used_keys,
         llm=llm,
-        inputHash=input_hash,
         predictedAt=datetime.now(timezone.utc),
     )
-
-
-def calculate_input_hash(request: PredictionRequest, model_version: str) -> str:
-    """동일 입력 결과 재사용을 위한 결정적 SHA-256 해시를 계산한다."""
-
-    # 키 순서와 공백 차이에 영향을 받지 않도록 정렬된 UTF-8 JSON을 사용한다.
-    payload = {
-        "modelVersion": model_version,
-        "featureSchemaVersion": request.feature_schema_version,
-        "promptVersion": request.prompt_version,
-        "generateExplanation": request.generate_explanation,
-        "currentFeatures": request.current_features,
-        "previousFeatures": request.previous_features,
-    }
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

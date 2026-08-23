@@ -87,9 +87,7 @@ public class PredictionQueryService {
                 nullableString(row.get("explanation")),
                 new PredictionDetailResponse.Llm(
                         llmStatus,
-                        nullableString(row.get("promptVersion")),
-                        nullableString(row.get("llmErrorMessage"))),
-                stringValue(row.get("inputHash")),
+                        nullableString(row.get("promptVersion"))),
                 instantValue(row.get("predictedAt")));
     }
 

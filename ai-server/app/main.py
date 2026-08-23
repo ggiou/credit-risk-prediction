@@ -6,7 +6,6 @@ from functools import lru_cache
 from fastapi import FastAPI, HTTPException, status
 
 from .config import settings
-from .hashing import prediction_input_hash
 from .llm import RiskExplanationClient
 from .model_bundle import ModelBundle, ModelContractError
 from .schemas import LlmMeta, PredictRequest, PredictResponse, PredictionValues
@@ -140,15 +139,6 @@ def predict(request: PredictRequest) -> PredictResponse:
             used_feature_keys = llm_result.used_feature_keys
             llm_error = llm_result.error_message
 
-    input_hash = prediction_input_hash(
-        model_version=model.model_version,
-        feature_schema_version=request.featureSchemaVersion,
-        prompt_version=request.promptVersion,
-        generate_explanation=request.generateExplanation,
-        current_features=request.currentFeatures,
-        previous_features=request.previousFeatures,
-    )
-
     return PredictResponse(
         requestId=request.requestId,
         customerId=request.customerId,
@@ -165,6 +155,5 @@ def predict(request: PredictRequest) -> PredictResponse:
             promptVersion=request.promptVersion,
             errorMessage=llm_error,
         ),
-        inputHash=input_hash,
         predictedAt=datetime.now(timezone.utc),
     )
