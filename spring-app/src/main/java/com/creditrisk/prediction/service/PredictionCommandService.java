@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 고객 피처 조회, 결과 재사용, FastAPI 호출, 예측 저장을 순서대로 수행한다.
+ * 고객 피처 조회, 스냅샷·모델 기준 결과 재사용, FastAPI 호출, 예측 저장을 순서대로 수행한다.
  */
 @Service
 public class PredictionCommandService {
@@ -39,7 +39,6 @@ public class PredictionCommandService {
     private final CustomerDetailService customerDetailService;
     private final PredictionQueryService predictionQueryService;
     private final AiPredictionClient aiPredictionClient;
-    private final InputHashService inputHashService;
     private final ObjectMapper objectMapper;
     private final String modelVersion;
     private final String promptVersion;
@@ -50,7 +49,6 @@ public class PredictionCommandService {
             CustomerDetailService customerDetailService,
             PredictionQueryService predictionQueryService,
             AiPredictionClient aiPredictionClient,
-            InputHashService inputHashService,
             ObjectMapper objectMapper,
             @Value("${ai.model.version}") String modelVersion,
             @Value("${ai.model.prompt-version}") String promptVersion) {
@@ -58,7 +56,6 @@ public class PredictionCommandService {
         this.customerDetailService = customerDetailService;
         this.predictionQueryService = predictionQueryService;
         this.aiPredictionClient = aiPredictionClient;
-        this.inputHashService = inputHashService;
         this.objectMapper = objectMapper;
         this.modelVersion = modelVersion;
         this.promptVersion = promptVersion;
@@ -89,26 +86,20 @@ public class PredictionCommandService {
                     Map.of("customerId", customerId, "baseYm", baseYm));
         }
 
+        long featureSnapshotId = ((Number) currentSnapshot.get("featureSnapshotId")).longValue();
+        Map<String, Object> reused = predictionMapper.findByFeatureSnapshotAndModel(
+                featureSnapshotId, modelVersion);
+        if (reused != null && !reused.isEmpty()) {
+            // 동일 스냅샷을 같은 모델로 이미 예측했다면 FastAPI를 다시 호출하지 않는다.
+            return PredictionExecutionResponse.from(predictionQueryService.toDetail(reused), true);
+        }
+
         Map<String, Object> previousSnapshot = findSnapshot(snapshots, previousBaseYm);
         Map<String, Object> currentFeatures = parseFeatures(currentSnapshot.get("features"));
         Map<String, Object> previousFeatures = previousSnapshot == null
                 ? null
                 : parseFeatures(previousSnapshot.get("features"));
         String featureSchemaVersion = String.valueOf(currentSnapshot.get("featureSchemaVersion"));
-        String inputHash = inputHashService.calculate(
-                modelVersion,
-                featureSchemaVersion,
-                promptVersion,
-                generateExplanation,
-                currentFeatures,
-                previousFeatures);
-
-        Map<String, Object> reused = predictionMapper.findByInputHash(inputHash);
-        if (reused != null && !reused.isEmpty()) {
-            // 동일 입력과 버전이면 FastAPI를 다시 호출하지 않고 저장 결과를 반환한다.
-            return PredictionExecutionResponse.from(predictionQueryService.toDetail(reused), true);
-        }
-
         Map<String, Object> aiRequest = buildAiRequest(
                 requestId,
                 customerId,
@@ -120,14 +111,15 @@ public class PredictionCommandService {
                 currentFeatures,
                 previousFeatures);
         Map<String, Object> aiResponse = aiPredictionClient.predict(aiRequest);
-        validateAiResponse(aiResponse, customerId, baseYm, inputHash);
-        Map<String, Object> insertValues = toInsertValues(aiResponse, inputHash);
+        validateAiResponse(aiResponse, customerId, baseYm, featureSnapshotId);
+        Map<String, Object> insertValues = toInsertValues(aiResponse);
 
         try {
             predictionMapper.insertPrediction(insertValues);
         } catch (DuplicateKeyException exception) {
-            // 동시에 같은 입력이 실행된 경우 유일키를 기준으로 먼저 저장된 결과를 재사용한다.
-            Map<String, Object> concurrentResult = predictionMapper.findByInputHash(inputHash);
+            // 동시에 같은 스냅샷과 모델이 실행된 경우 먼저 저장된 결과를 재사용한다.
+            Map<String, Object> concurrentResult = predictionMapper.findByFeatureSnapshotAndModel(
+                    featureSnapshotId, modelVersion);
             if (concurrentResult != null && !concurrentResult.isEmpty()) {
                 return PredictionExecutionResponse.from(predictionQueryService.toDetail(concurrentResult), true);
             }
@@ -187,18 +179,19 @@ public class PredictionCommandService {
         return request;
     }
 
-    /** AI 응답의 식별자, 버전, 해시, 위험률 범위를 검증한다. */
+    /** AI 응답의 식별자, 스냅샷, 버전, 위험률 범위를 검증한다. */
     @SuppressWarnings("unchecked")
     private void validateAiResponse(
             Map<String, Object> response,
             String customerId,
             String baseYm,
-            String expectedInputHash) {
+            long expectedFeatureSnapshotId) {
         // 다른 요청의 응답이나 다른 버전 결과를 저장하지 않도록 핵심 식별자를 모두 비교한다.
         if (!customerId.equals(String.valueOf(response.get("customerId")))
                 || !baseYm.equals(String.valueOf(response.get("baseYm")))
                 || !modelVersion.equals(String.valueOf(response.get("modelVersion")))
-                || !expectedInputHash.equals(String.valueOf(response.get("inputHash")))) {
+                || !String.valueOf(expectedFeatureSnapshotId).equals(
+                        String.valueOf(response.get("featureSnapshotId")))) {
             throw invalidAiResponse("AI 서버 응답 식별자 또는 버전이 요청과 일치하지 않습니다.");
         }
         Object predictionObject = response.get("prediction");
@@ -215,7 +208,7 @@ public class PredictionCommandService {
 
     /** 검증이 끝난 AI 응답을 예측 결과 INSERT 값으로 변환한다. */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> toInsertValues(Map<String, Object> response, String inputHash) {
+    private Map<String, Object> toInsertValues(Map<String, Object> response) {
         Map<String, Object> prediction = (Map<String, Object>) response.get("prediction");
         Map<String, Object> llm = response.get("llm") instanceof Map<?, ?> value
                 ? (Map<String, Object>) value
@@ -225,7 +218,6 @@ public class PredictionCommandService {
                 : new ArrayList<>();
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("featureSnapshotId", response.get("featureSnapshotId"));
-        values.put("inputHash", inputHash);
         values.put("modelVersion", response.get("modelVersion"));
         values.put("hazard1m", prediction.get("hazard1m"));
         values.put("hazard2m", prediction.get("hazard2m"));
@@ -237,7 +229,6 @@ public class PredictionCommandService {
         values.put("explanation", response.get("explanation"));
         values.put("llmStatus", llmStatusName(llm));
         values.put("promptVersion", llm.getOrDefault("promptVersion", promptVersion));
-        values.put("llmErrorMessage", llm.get("errorMessage"));
         values.put("predictedAt", Timestamp.from(parseInstant(response.get("predictedAt"))));
         return values;
     }

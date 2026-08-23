@@ -67,7 +67,11 @@ public class CustomerDetailService {
                 new CustomerSummaryResponse.Customer(
                         customerId,
                         nullableString(row.get("displayName")),
-                        booleanValue(row.get("synthetic"))),
+                        booleanValue(row.get("synthetic")),
+                        nullableString(row.get("ageBand")),
+                        nullableString(row.get("lifeStage")),
+                        nullableInteger(row.get("creditMembershipMonths")),
+                        nullableBoolean(row.get("memberDelinquencyFlag"))),
                 baseYm,
                 new CustomerSummaryResponse.Prediction(
                         nullableLong(row.get("predictionId")),
@@ -220,6 +224,14 @@ public class CustomerDetailService {
     /** MySQL Boolean 표현을 자바 boolean으로 변환한다. */
     private boolean booleanValue(Object value) {
         return value instanceof Boolean bool ? bool : value instanceof Number number && number.intValue() == 1;
+    }
+
+    /** null을 보존하는 MySQL Boolean 표현을 변환한다. */
+    private Boolean nullableBoolean(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return booleanValue(value);
     }
 
     /** JDBC Timestamp를 UTC 시각으로 변환한다. */

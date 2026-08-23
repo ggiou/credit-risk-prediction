@@ -72,7 +72,6 @@
         SELECT pr.prediction_id AS predictionId,
                fs.customer_id AS customerId,
                fs.base_ym AS baseYm,
-               pr.input_hash AS inputHash,
                pr.model_version AS modelVersion,
                fs.feature_schema_version AS featureSchemaVersion,
                pr.hazard_1m AS hazard1m,
@@ -85,7 +84,6 @@
                pr.explanation,
                pr.llm_status AS llmStatus,
                pr.prompt_version AS promptVersion,
-               pr.llm_error_message AS llmErrorMessage,
                pr.predicted_at AS predictedAt
         FROM prediction_result pr
         JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
@@ -96,7 +94,6 @@
         SELECT pr.prediction_id AS predictionId,
                fs.customer_id AS customerId,
                fs.base_ym AS baseYm,
-               pr.input_hash AS inputHash,
                pr.model_version AS modelVersion,
                fs.feature_schema_version AS featureSchemaVersion,
                pr.hazard_1m AS hazard1m,
@@ -109,7 +106,6 @@
                pr.explanation,
                pr.llm_status AS llmStatus,
                pr.prompt_version AS promptVersion,
-               pr.llm_error_message AS llmErrorMessage,
                pr.predicted_at AS predictedAt
         FROM prediction_result pr
         JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
@@ -132,11 +128,10 @@
         ORDER BY base_ym DESC
     </select>
 
-    <select id="findByInputHash" resultType="map">
+    <select id="findByFeatureSnapshotAndModel" resultType="map">
         SELECT pr.prediction_id AS predictionId,
                fs.customer_id AS customerId,
                fs.base_ym AS baseYm,
-               pr.input_hash AS inputHash,
                pr.model_version AS modelVersion,
                fs.feature_schema_version AS featureSchemaVersion,
                pr.hazard_1m AS hazard1m,
@@ -149,25 +144,25 @@
                pr.explanation,
                pr.llm_status AS llmStatus,
                pr.prompt_version AS promptVersion,
-               pr.llm_error_message AS llmErrorMessage,
                pr.predicted_at AS predictedAt
         FROM prediction_result pr
         JOIN feature_snapshot fs ON fs.feature_snapshot_id = pr.feature_snapshot_id
-        WHERE pr.input_hash = #{inputHash}
+        WHERE pr.feature_snapshot_id = #{featureSnapshotId}
+          AND pr.model_version = #{modelVersion}
         LIMIT 1
     </select>
 
     <insert id="insertPrediction" parameterType="map" useGeneratedKeys="true" keyProperty="predictionId">
         INSERT INTO prediction_result (
-            feature_snapshot_id, input_hash, model_version,
+            feature_snapshot_id, model_version,
             hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m,
             risk_grade, percentile, reasons, explanation, recommendation,
-            llm_status, prompt_version, llm_error_message, predicted_at
+            llm_status, prompt_version, predicted_at
         ) VALUES (
-            #{featureSnapshotId}, #{inputHash}, #{modelVersion},
+            #{featureSnapshotId}, #{modelVersion},
             #{hazard1m}, #{hazard2m}, #{hazard3m}, #{cumulativeRisk3m},
             #{riskGradeName}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, NULL,
-            #{llmStatus}, #{promptVersion}, #{llmErrorMessage}, #{predictedAt}
+            #{llmStatus}, #{promptVersion}, #{predictedAt}
         )
     </insert>
 </mapper>

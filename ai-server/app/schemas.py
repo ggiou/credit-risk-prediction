@@ -61,5 +61,4 @@ class PredictResponse(BaseModel):
     explanation: str | None = None
     usedFeatureKeys: list[str] = []
     llm: LlmMeta
-    inputHash: str
     predictedAt: datetime

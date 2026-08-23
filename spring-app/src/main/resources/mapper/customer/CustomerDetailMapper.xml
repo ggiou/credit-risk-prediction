@@ -9,6 +9,10 @@
     <select id="findCustomerSummary" resultType="map">
         SELECT c.display_name AS displayName,
                c.is_synthetic AS synthetic,
+               ms.age_band AS ageBand,
+               ms.life_stage AS lifeStage,
+               ms.credit_membership_months AS creditMembershipMonths,
+               ms.member_delinquency_flag AS memberDelinquencyFlag,
                pr.prediction_id AS predictionId,
                CASE
                    WHEN pr.prediction_id IS NULL THEN 'NOT_ANALYZED'

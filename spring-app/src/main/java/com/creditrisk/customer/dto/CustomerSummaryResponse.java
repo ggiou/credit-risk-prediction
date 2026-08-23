@@ -17,7 +17,14 @@ public record CustomerSummaryResponse(
         List<RiskTrend> riskTrend) {
 
     /** 비식별 고객 기본 정보다. */
-    public record Customer(String customerId, String displayName, boolean synthetic) {
+    public record Customer(
+            String customerId,
+            String displayName,
+            boolean synthetic,
+            String ageBand,
+            String lifeStage,
+            Integer creditMembershipMonths,
+            Boolean memberDelinquencyFlag) {
     }
 
     /** 기준월의 현재 예측 결과다. */
@@ -68,4 +75,3 @@ public record CustomerSummaryResponse(
     public record RiskTrend(String baseYm, double hazard1m, double hazard2m, double hazard3m) {
     }
 }
-
