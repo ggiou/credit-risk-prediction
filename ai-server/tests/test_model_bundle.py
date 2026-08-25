@@ -1,4 +1,5 @@
 import json
+import math
 
 from app.model_bundle import ModelBundle
 
@@ -53,3 +54,22 @@ def test_compact_model_executes_without_retraining():
     assert prediction.hazard_3m > 0.5
     assert "horizon" in contributions
     assert enriched["horizon"] == 3
+
+
+def test_grade_and_percentile_follow_cumulative_risk_contract():
+    payload = make_payload()
+    probability = 0.02
+    leaf = math.log(probability / (1.0 - probability))
+    payload["trees"] = [[36, 0, 2.5, 1, 0, leaf, leaf]]
+    payload["c3_quantiles"] = [0.01, 0.03, 0.05, 0.07, 0.09]
+    model = ModelBundle(payload, source_sha256="test")
+    current = {name: 1.0 for name in payload["features"][:36]}
+    current["연령"] = "30대"
+    current["Life_Stage"] = "가족형성기"
+
+    prediction, _, _ = model.predict(current, None)
+
+    assert prediction.hazard_3m == probability
+    assert prediction.cumulative_risk_3m > payload["grade_thresholds"]["관심"]
+    assert prediction.risk_grade == "INTEREST"
+    assert prediction.percentile == 50.0

@@ -1,11 +1,10 @@
 # 모델 파일 배치
 
-실제 추론을 실행하려면 다음 파일을 이 디렉터리에 배치한다.
+실제 추론을 실행하려면 AI 담당자가 전달한 다음 파일 하나를 이 디렉터리에 배치한다.
 
-- `miribom-lgbm-v0.3.txt`: LightGBM Booster 모델
-- `feature-order.json`: 학습에 사용한 48개 입력 열 순서의 JSON 문자열 배열
+- `model_lgbm.json`: 트리, 48개 피처 순서, 등급 임계값, 10만 명 기준 백분위표를 포함한 v0.3 모델
 
-모델이 없을 때 API는 `503 MODEL_NOT_LOADED`를 반환한다. 화면과 API 연결만 확인할 때는
-`AI_ALLOW_RULE_BASED_FALLBACK=true`를 명시적으로 설정할 수 있다. 이 모드는 실제 모델 성능이나
-공모전 결과로 사용하면 안 된다.
+`app.main:app` 실행 경로는 별도의 LightGBM `.txt`나 `feature-order.json`을 사용하지 않는다.
+모델이 없거나 파일 해시가 전달본과 다르면 API는 503을 반환하며 임의의 규칙 기반 결과로 대체하지 않는다.
 
+이 디렉터리의 실제 모델 파일은 `.gitignore`로 제외되므로 저장소에 커밋되지 않는다.

@@ -1,4 +1,7 @@
-"""환경변수 기반 AI 서버 설정을 정의한다."""
+"""현재 app.main:app에서 사용하지 않는 이전 LightGBM Booster 실행 설정이다.
+
+실제 v0.3 JSON 모델 실행 설정은 ``app.config``를 사용한다.
+"""
 
 from functools import lru_cache
 from pathlib import Path

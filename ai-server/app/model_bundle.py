@@ -18,6 +18,42 @@ GRADE_CODE_BY_KOREAN = {
 }
 
 DISPLAY_NAMES = {
+    "남녀구분코드": "성별",
+    "연령": "연령대",
+    "입회경과개월수_신용": "신용카드 가입 경과 개월 수",
+    "회원여부_연체": "회원 연체 여부",
+    "유효카드수_신용": "유효 신용카드 수",
+    "이용가능카드수_신용": "이용 가능 신용카드 수",
+    "이용카드수_신용": "이용 신용카드 수",
+    "이용금액_R3M_신용": "최근 3개월 신용카드 이용금액",
+    "Life_Stage": "라이프 스테이지",
+    "카드이용한도금액": "카드 이용한도",
+    "CA한도금액": "현금서비스 이용한도",
+    "RV약정청구율": "리볼빙 약정 청구율",
+    "자발한도감액횟수_R12M": "최근 12개월 자발적 한도 감액 횟수",
+    "강제한도감액횟수_R12M": "최근 12개월 강제 한도 감액 횟수",
+    "강제한도감액금액_R12M": "최근 12개월 강제 한도 감액금액",
+    "한도증액횟수_R12M": "최근 12개월 한도 증액 횟수",
+    "카드이용한도금액_B1M": "전월 카드 이용한도",
+    "한도심사요청건수": "한도 심사 요청 건수",
+    "한도요청거절건수": "한도 요청 거절 건수",
+    "시장단기연체여부_R6M": "최근 6개월 시장 단기연체 여부",
+    "시장단기연체여부_R3M": "최근 3개월 시장 단기연체 여부",
+    "청구금액_B0": "기준월 청구금액",
+    "청구금액_R3M": "최근 3개월 청구금액",
+    "상환개월수_결제일_R3M": "최근 3개월 결제일 상환 개월 수",
+    "선결제건수_R3M": "최근 3개월 선결제 건수",
+    "연체건수_R6M": "최근 6개월 연체 건수",
+    "연체건수_R3M": "최근 3개월 연체 건수",
+    "잔액_B0M": "기준월 총 카드 잔액",
+    "잔액_일시불_B0M": "기준월 일시불 잔액",
+    "잔액_할부_B0M": "기준월 할부 잔액",
+    "잔액_현금서비스_B0M": "기준월 현금서비스 잔액",
+    "잔액_리볼빙일시불이월_B0M": "기준월 리볼빙 일시불 이월잔액",
+    "잔액_카드론_B0M": "기준월 카드론 잔액",
+    "잔액_현금서비스_B1M": "전월 현금서비스 잔액",
+    "잔액_카드론_B1M": "전월 카드론 잔액",
+    "월중평잔": "월중 평균잔액",
     "f_사용률": "카드 한도 사용률",
     "f_현금서비스비중": "현금서비스 비중",
     "f_카드론비중": "카드론 비중",
@@ -29,12 +65,6 @@ DISPLAY_NAMES = {
     "f_사용률변화": "카드 한도 사용률 변화",
     "f_청구금액증가": "청구금액 증가",
     "f_카드가용비율": "이용 가능 카드 비율",
-    "연체건수_R3M": "최근 3개월 연체 건수",
-    "연체건수_R6M": "최근 6개월 연체 건수",
-    "시장단기연체여부_R3M": "최근 3개월 시장 단기연체 여부",
-    "시장단기연체여부_R6M": "최근 6개월 시장 단기연체 여부",
-    "청구금액_B0": "현재 청구금액",
-    "잔액_B0M": "현재 총잔액",
 }
 
 RATIO_FEATURES = {
@@ -212,23 +242,27 @@ class ModelBundle:
             contributions[feature_name] = contributions.get(feature_name, 0.0) + local_delta
         return self._sigmoid(raw_score), contributions, enriched
 
-    def _risk_grade(self, hazard_3m: float) -> str:
+    def _risk_grade(self, cumulative_risk_3m: float) -> str:
         interest = float(self.grade_thresholds.get("관심", 0.03))
         caution = float(self.grade_thresholds.get("주의", 0.08))
         warning = float(self.grade_thresholds.get("경고", 0.15))
-        if hazard_3m >= warning:
+        if cumulative_risk_3m >= warning:
             return "WARNING"
-        if hazard_3m >= caution:
+        if cumulative_risk_3m >= caution:
             return "CAUTION"
-        if hazard_3m >= interest:
+        if cumulative_risk_3m >= interest:
             return "INTEREST"
         return "NORMAL"
 
-    def _percentile(self, hazard_3m: float) -> float:
+    def _percentile(self, cumulative_risk_3m: float) -> float:
         if not self.c3_quantiles:
             return 0.0
-        index = bisect.bisect_right(self.c3_quantiles, hazard_3m)
-        return round(index / len(self.c3_quantiles) * 100.0, 4)
+        if len(self.c3_quantiles) == 1:
+            return 100.0
+        # 전달 모델의 predict.js와 동일하게 누적위험이 큰 고객부터 상위 백분위를 계산한다.
+        index = max(0, bisect.bisect_right(self.c3_quantiles, cumulative_risk_3m) - 1)
+        upper_percentile = (1.0 - index / (len(self.c3_quantiles) - 1)) * 100.0
+        return round(max(0.001, upper_percentile), 4)
 
     def predict(
         self,
@@ -244,8 +278,8 @@ class ModelBundle:
             hazard_2m=h2,
             hazard_3m=h3,
             cumulative_risk_3m=cumulative,
-            risk_grade=self._risk_grade(h3),
-            percentile=self._percentile(h3),
+            risk_grade=self._risk_grade(cumulative),
+            percentile=self._percentile(cumulative),
         )
         return prediction, contributions, enriched
 
