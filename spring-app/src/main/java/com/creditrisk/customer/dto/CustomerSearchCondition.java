@@ -7,7 +7,7 @@ public record CustomerSearchCondition(
         String baseYm,
         String previousBaseYm,
         String customerId,
-        String riskGradeName,
+        String riskGrade,
         String analysisStatus,
         int horizon,
         Double minRiskRate,

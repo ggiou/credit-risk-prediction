@@ -1,6 +1,7 @@
 package com.creditrisk.prediction.service;
 
 import com.creditrisk.common.domain.LlmStatus;
+import com.creditrisk.common.domain.RiskGrade;
 import com.creditrisk.common.exception.BusinessException;
 import com.creditrisk.customer.service.CustomerDetailService;
 import com.creditrisk.prediction.client.AiPredictionClient;
@@ -89,8 +90,8 @@ public class PredictionCommandService {
         long featureSnapshotId = ((Number) currentSnapshot.get("featureSnapshotId")).longValue();
         Map<String, Object> reused = predictionMapper.findByFeatureSnapshotAndModel(
                 featureSnapshotId, modelVersion);
-        if (reused != null && !reused.isEmpty()) {
-            // 동일 스냅샷을 같은 모델로 이미 예측했다면 FastAPI를 다시 호출하지 않는다.
+        if (hasResult(reused) && !needsExplanationRetry(reused, generateExplanation)) {
+            // 완료된 설명이 있거나 설명을 요청하지 않았다면 저장된 예측 결과를 그대로 재사용한다.
             return PredictionExecutionResponse.from(predictionQueryService.toDetail(reused), true);
         }
 
@@ -114,6 +115,15 @@ public class PredictionCommandService {
         validateAiResponse(aiResponse, customerId, baseYm, featureSnapshotId);
         Map<String, Object> insertValues = toInsertValues(aiResponse);
 
+        if (hasResult(reused)) {
+            // 예측 행은 새로 만들지 않고 실패·미요청 상태였던 LLM 결과만 안전하게 갱신한다.
+            long predictionId = ((Number) reused.get("predictionId")).longValue();
+            insertValues.put("predictionId", predictionId);
+            predictionMapper.updateRetriedExplanation(insertValues);
+            PredictionDetailResponse updated = predictionQueryService.getById(predictionId);
+            return PredictionExecutionResponse.from(updated, true);
+        }
+
         try {
             predictionMapper.insertPrediction(insertValues);
         } catch (DuplicateKeyException exception) {
@@ -129,6 +139,21 @@ public class PredictionCommandService {
         long predictionId = ((Number) insertValues.get("predictionId")).longValue();
         PredictionDetailResponse saved = predictionQueryService.getById(predictionId);
         return PredictionExecutionResponse.from(saved, false);
+    }
+
+    /** 동일 스냅샷·모델 결과가 존재하는지 확인한다. */
+    private boolean hasResult(Map<String, Object> result) {
+        return result != null && !result.isEmpty();
+    }
+
+    /** 설명 요청인데 완료된 LLM 설명이 없으면 동일 피처로 설명 생성을 재시도한다. */
+    private boolean needsExplanationRetry(Map<String, Object> result, boolean generateExplanation) {
+        if (!generateExplanation) {
+            return false;
+        }
+        boolean completed = LlmStatus.COMPLETED.name().equals(String.valueOf(result.get("llmStatus")));
+        Object explanation = result.get("explanation");
+        return !completed || explanation == null || String.valueOf(explanation).isBlank();
     }
 
     /** 기준년월이 일치하는 스냅샷 행을 찾는다. */
@@ -223,7 +248,7 @@ public class PredictionCommandService {
         values.put("hazard2m", prediction.get("hazard2m"));
         values.put("hazard3m", prediction.get("hazard3m"));
         values.put("cumulativeRisk3m", prediction.get("cumulativeRisk3m"));
-        values.put("riskGradeName", riskGradeName(String.valueOf(prediction.get("riskGrade"))));
+        values.put("riskGrade", riskGradeCode(String.valueOf(prediction.get("riskGrade"))));
         values.put("percentile", prediction.get("percentile"));
         values.put("reasons", writeJson(riskFactors));
         values.put("explanation", response.get("explanation"));
@@ -244,15 +269,13 @@ public class PredictionCommandService {
         }
     }
 
-    /** API 위험등급 코드를 DB 한글값으로 변환한다. */
-    private String riskGradeName(String code) {
-        return switch (code) {
-            case "NORMAL" -> "정상";
-            case "INTEREST" -> "관심";
-            case "CAUTION" -> "주의";
-            case "WARNING" -> "경고";
-            default -> throw invalidAiResponse("AI 서버 위험등급이 올바르지 않습니다.");
-        };
+    /** AI 응답의 영문 위험등급 코드만 DB 저장값으로 허용한다. */
+    private String riskGradeCode(String code) {
+        try {
+            return RiskGrade.valueOf(code).name();
+        } catch (IllegalArgumentException exception) {
+            throw invalidAiResponse("AI 서버 위험등급이 올바르지 않습니다.");
+        }
     }
 
     /** 객체를 DB JSON 문자열로 직렬화한다. */

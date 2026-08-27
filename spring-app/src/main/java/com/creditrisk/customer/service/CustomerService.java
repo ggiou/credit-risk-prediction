@@ -61,7 +61,7 @@ public class CustomerService {
                 baseYm,
                 previousBaseYm,
                 blankToNull(customerId),
-                riskGrade == null ? null : riskGrade.getDisplayName(),
+                riskGrade == null ? null : riskGrade.name(),
                 blankToNull(analysisStatus),
                 horizon,
                 minRiskRate,

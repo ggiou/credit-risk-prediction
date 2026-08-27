@@ -43,18 +43,20 @@ public class CustomerPredictionController {
     }
 
     /**
-     * 고객과 기준월의 활성 모델 최신 예측 결과를 조회한다.
+     * 고객과 기준월의 활성 모델 최신 예측 결과를 조회한다. 아직 분석하지 않은 월은 정상적인 빈 응답으로 반환한다.
      */
     @GetMapping("/current")
-    public ApiResponse<PredictionDetailResponse> getCurrentPrediction(
+    public ResponseEntity<ApiResponse<PredictionDetailResponse>> getCurrentPrediction(
             @PathVariable String customerId,
             @RequestParam(required = false) String baseYm,
             HttpServletRequest request) {
         // 기준월이 없으면 피처 스냅샷의 최신월로 보완한다.
         QueryValidator.validateBaseYm(baseYm);
         String resolvedBaseYm = metaService.resolveBaseYm(baseYm);
-        PredictionDetailResponse response = predictionQueryService.getCurrent(customerId, resolvedBaseYm);
-        return ApiResponse.success(response, RequestIds.from(request));
+        String requestId = RequestIds.from(request);
+        return predictionQueryService.findCurrent(customerId, resolvedBaseYm)
+                .map(response -> ResponseEntity.ok(ApiResponse.success(response, requestId)))
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     /**

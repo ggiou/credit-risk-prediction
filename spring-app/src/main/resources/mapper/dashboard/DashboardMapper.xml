@@ -21,7 +21,7 @@
 
     <select id="findPredictionSummary" resultType="map">
         SELECT COUNT(DISTINCT pr.prediction_id) AS predictionCompletedCount,
-               SUM(CASE WHEN pr.risk_grade = '경고' THEN 1 ELSE 0 END) AS highRiskCustomerCount,
+               SUM(CASE WHEN pr.risk_grade = 'WARNING' THEN 1 ELSE 0 END) AS highRiskCustomerCount,
                SUM(CASE WHEN previous_pr.hazard_3m IS NOT NULL
                              AND pr.hazard_3m &gt; previous_pr.hazard_3m THEN 1 ELSE 0 END)
                    AS riskIncreasedCustomerCount
@@ -39,20 +39,20 @@
     </select>
 
     <select id="findRiskDistribution" resultType="map">
-        SELECT CASE pr.risk_grade
-                   WHEN '정상' THEN 'NORMAL'
-                   WHEN '관심' THEN 'INTEREST'
-                   WHEN '주의' THEN 'CAUTION'
-                   WHEN '경고' THEN 'WARNING'
-               END AS riskGrade,
-               pr.risk_grade AS riskGradeName,
+        SELECT pr.risk_grade AS riskGrade,
+               CASE pr.risk_grade
+                   WHEN 'NORMAL' THEN '정상'
+                   WHEN 'INTEREST' THEN '관심'
+                   WHEN 'CAUTION' THEN '주의'
+                   WHEN 'WARNING' THEN '경고'
+               END AS riskGradeName,
                COUNT(*) AS count
         FROM prediction_result pr
         <include refid="latestPredictionJoin"/>
         WHERE fs.base_ym = #{baseYm}
           AND pr.model_version = #{modelVersion}
         GROUP BY pr.risk_grade
-        ORDER BY FIELD(pr.risk_grade, '정상', '관심', '주의', '경고')
+        ORDER BY FIELD(pr.risk_grade, 'NORMAL', 'INTEREST', 'CAUTION', 'WARNING')
     </select>
 
     <select id="findAverageRisk" resultType="map">
@@ -68,13 +68,13 @@
     <select id="findHighRiskCustomers" resultType="map">
         SELECT fs.customer_id AS customerId,
                pr.prediction_id AS predictionId,
+               pr.risk_grade AS riskGrade,
                CASE pr.risk_grade
-                   WHEN '정상' THEN 'NORMAL'
-                   WHEN '관심' THEN 'INTEREST'
-                   WHEN '주의' THEN 'CAUTION'
-                   WHEN '경고' THEN 'WARNING'
-               END AS riskGrade,
-               pr.risk_grade AS riskGradeName,
+                   WHEN 'NORMAL' THEN '정상'
+                   WHEN 'INTEREST' THEN '관심'
+                   WHEN 'CAUTION' THEN '주의'
+                   WHEN 'WARNING' THEN '경고'
+               END AS riskGradeName,
                pr.hazard_1m AS hazard1m,
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
@@ -96,4 +96,3 @@
         LIMIT #{limit}
     </select>
 </mapper>
-

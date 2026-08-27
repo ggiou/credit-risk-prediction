@@ -110,8 +110,8 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     hazard_2m DOUBLE NOT NULL,
     hazard_3m DOUBLE NOT NULL,
     cumulative_risk_3m DOUBLE NOT NULL,
-    risk_grade VARCHAR(10) NOT NULL COMMENT '정상, 관심, 주의, 경고',
-    percentile DOUBLE NOT NULL,
+    risk_grade VARCHAR(10) NOT NULL COMMENT 'NORMAL, INTEREST, CAUTION, WARNING',
+    percentile DOUBLE NOT NULL COMMENT '10만 명 기준 고위험 상위 비율: 0에 가까울수록 고위험, 100에 가까울수록 저위험',
     reasons JSON NULL,
     explanation TEXT NULL,
     recommendation TEXT NULL COMMENT '현재 MVP에서 사용하지 않음',
@@ -131,6 +131,6 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     CONSTRAINT chk_hazard_3m CHECK (hazard_3m BETWEEN 0 AND 1),
     CONSTRAINT chk_cumulative_risk CHECK (cumulative_risk_3m BETWEEN 0 AND 1),
     CONSTRAINT chk_percentile CHECK (percentile BETWEEN 0 AND 100),
-    CONSTRAINT chk_risk_grade CHECK (risk_grade IN ('정상', '관심', '주의', '경고')),
+    CONSTRAINT chk_risk_grade CHECK (risk_grade IN ('NORMAL', 'INTEREST', 'CAUTION', 'WARNING')),
     CONSTRAINT chk_llm_status CHECK (llm_status IN ('NOT_REQUESTED', 'COMPLETED', 'FAILED'))
 ) COMMENT='모델 예측 및 LLM 설명 결과';

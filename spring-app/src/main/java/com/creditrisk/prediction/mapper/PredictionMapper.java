@@ -41,4 +41,7 @@ public interface PredictionMapper {
 
     /** FastAPI 검증이 끝난 예측 결과를 저장한다. */
     int insertPrediction(Map<String, Object> values);
+
+    /** 기존 예측 행에 재시도한 LLM 결과와 수정된 모델 후처리값을 반영한다. */
+    int updateRetriedExplanation(Map<String, Object> values);
 }

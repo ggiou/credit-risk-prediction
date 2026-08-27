@@ -37,11 +37,11 @@ public class PredictionHistoryService {
             int page,
             int size,
             String sort) {
-        // DB 값인 한글 위험등급으로 한 번 변환해 Mapper의 조건을 단순하게 유지한다.
+        // DB에 저장된 영문 위험등급 코드로 Mapper 검색 조건을 구성한다.
         PredictionHistoryCondition condition = new PredictionHistoryCondition(
                 blankToNull(customerId),
                 blankToNull(baseYm),
-                riskGrade == null ? null : riskGrade.getDisplayName(),
+                riskGrade == null ? null : riskGrade.name(),
                 blankToNull(modelVersion),
                 llmStatus == null ? null : llmStatus.name(),
                 predictedFrom,

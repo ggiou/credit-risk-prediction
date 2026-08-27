@@ -8,7 +8,7 @@ import java.time.Instant;
 public record PredictionHistoryCondition(
         String customerId,
         String baseYm,
-        String riskGradeName,
+        String riskGrade,
         String modelVersion,
         String llmStatus,
         Instant predictedFrom,

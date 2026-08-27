@@ -15,8 +15,8 @@
             <if test="condition.baseYm != null">
                 AND fs.base_ym = #{condition.baseYm}
             </if>
-            <if test="condition.riskGradeName != null">
-                AND pr.risk_grade = #{condition.riskGradeName}
+            <if test="condition.riskGrade != null">
+                AND pr.risk_grade = #{condition.riskGrade}
             </if>
             <if test="condition.modelVersion != null">
                 AND pr.model_version = #{condition.modelVersion}
@@ -41,13 +41,13 @@
                pr.hazard_1m AS hazard1m,
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
+               pr.risk_grade AS riskGrade,
                CASE pr.risk_grade
-                   WHEN '정상' THEN 'NORMAL'
-                   WHEN '관심' THEN 'INTEREST'
-                   WHEN '주의' THEN 'CAUTION'
-                   WHEN '경고' THEN 'WARNING'
-               END AS riskGrade,
-               pr.risk_grade AS riskGradeName,
+                   WHEN 'NORMAL' THEN '정상'
+                   WHEN 'INTEREST' THEN '관심'
+                   WHEN 'CAUTION' THEN '주의'
+                   WHEN 'WARNING' THEN '경고'
+               END AS riskGradeName,
                pr.model_version AS modelVersion,
                fs.feature_schema_version AS featureSchemaVersion,
                pr.llm_status AS llmStatus,
@@ -78,7 +78,13 @@
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
                pr.cumulative_risk_3m AS cumulativeRisk3m,
-               pr.risk_grade AS riskGradeName,
+               pr.risk_grade AS riskGrade,
+               CASE pr.risk_grade
+                   WHEN 'NORMAL' THEN '정상'
+                   WHEN 'INTEREST' THEN '관심'
+                   WHEN 'CAUTION' THEN '주의'
+                   WHEN 'WARNING' THEN '경고'
+               END AS riskGradeName,
                pr.percentile,
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
@@ -100,7 +106,13 @@
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
                pr.cumulative_risk_3m AS cumulativeRisk3m,
-               pr.risk_grade AS riskGradeName,
+               pr.risk_grade AS riskGrade,
+               CASE pr.risk_grade
+                   WHEN 'NORMAL' THEN '정상'
+                   WHEN 'INTEREST' THEN '관심'
+                   WHEN 'CAUTION' THEN '주의'
+                   WHEN 'WARNING' THEN '경고'
+               END AS riskGradeName,
                pr.percentile,
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
@@ -138,7 +150,13 @@
                pr.hazard_2m AS hazard2m,
                pr.hazard_3m AS hazard3m,
                pr.cumulative_risk_3m AS cumulativeRisk3m,
-               pr.risk_grade AS riskGradeName,
+               pr.risk_grade AS riskGrade,
+               CASE pr.risk_grade
+                   WHEN 'NORMAL' THEN '정상'
+                   WHEN 'INTEREST' THEN '관심'
+                   WHEN 'CAUTION' THEN '주의'
+                   WHEN 'WARNING' THEN '경고'
+               END AS riskGradeName,
                pr.percentile,
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
@@ -161,8 +179,20 @@
         ) VALUES (
             #{featureSnapshotId}, #{modelVersion},
             #{hazard1m}, #{hazard2m}, #{hazard3m}, #{cumulativeRisk3m},
-            #{riskGradeName}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, NULL,
+            #{riskGrade}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, NULL,
             #{llmStatus}, #{promptVersion}, #{predictedAt}
         )
     </insert>
+
+    <update id="updateRetriedExplanation" parameterType="map">
+        UPDATE prediction_result
+        SET risk_grade = #{riskGrade},
+            percentile = #{percentile},
+            reasons = CAST(#{reasons} AS JSON),
+            explanation = #{explanation},
+            llm_status = #{llmStatus},
+            prompt_version = #{promptVersion}
+        WHERE prediction_id = #{predictionId}
+          AND (llm_status != 'COMPLETED' OR explanation IS NULL OR explanation = '')
+    </update>
 </mapper>

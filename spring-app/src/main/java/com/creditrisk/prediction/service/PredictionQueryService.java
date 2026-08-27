@@ -14,6 +14,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 저장된 예측 결과를 상세 응답으로 변환한다.
@@ -54,18 +55,27 @@ public class PredictionQueryService {
      * 고객과 기준월의 활성 모델 최신 예측 결과를 조회한다.
      */
     public PredictionDetailResponse getCurrent(String customerId, String baseYm) {
+        return findCurrent(customerId, baseYm)
+                .orElseThrow(() -> predictionNotFound(Map.of("customerId", customerId, "baseYm", baseYm)));
+    }
+
+    /**
+     * 고객과 기준월의 활성 모델 최신 예측 결과를 선택적으로 조회한다.
+     */
+    public Optional<PredictionDetailResponse> findCurrent(String customerId, String baseYm) {
         // 동일 월에 재분석 이력이 여러 개면 가장 최근 저장 결과를 사용한다.
         Map<String, Object> row = predictionMapper.findCurrent(customerId, baseYm, modelVersion);
         if (row == null || row.isEmpty()) {
-            throw predictionNotFound(Map.of("customerId", customerId, "baseYm", baseYm));
+            return Optional.empty();
         }
-        return toDetail(row);
+        return Optional.of(toDetail(row));
     }
 
     /**
      * DB 조회 행을 API 예측 상세 구조로 변환한다.
      */
     public PredictionDetailResponse toDetail(Map<String, Object> row) {
+        String riskGrade = stringValue(row.get("riskGrade"));
         String riskGradeName = stringValue(row.get("riskGradeName"));
         String llmStatus = stringValue(row.get("llmStatus"));
         return new PredictionDetailResponse(
@@ -80,7 +90,7 @@ public class PredictionQueryService {
                         doubleValue(row.get("hazard2m")),
                         doubleValue(row.get("hazard3m")),
                         doubleValue(row.get("cumulativeRisk3m")),
-                        riskGradeCode(riskGradeName),
+                        riskGrade,
                         riskGradeName,
                         doubleValue(row.get("percentile"))),
                 parseReasons(row.get("reasons")),
@@ -117,17 +127,6 @@ public class PredictionQueryService {
                 "예측 결과를 찾을 수 없습니다.",
                 HttpStatus.NOT_FOUND,
                 details);
-    }
-
-    /** 한글 위험등급을 API 코드로 변환한다. */
-    private String riskGradeCode(String riskGradeName) {
-        return switch (riskGradeName) {
-            case "정상" -> "NORMAL";
-            case "관심" -> "INTEREST";
-            case "주의" -> "CAUTION";
-            case "경고" -> "WARNING";
-            default -> "";
-        };
     }
 
     /** DB 값을 문자열로 변환한다. */
