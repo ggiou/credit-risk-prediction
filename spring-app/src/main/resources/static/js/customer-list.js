@@ -22,7 +22,12 @@ async function search() {
     lastPage = data.totalPages;
     document.getElementById("totalCount").textContent = `${BO.number(data.totalElements)}명`;
     document.getElementById("pageInfo").textContent = `${data.totalPages ? data.page + 1 : 0} / ${data.totalPages}`;
-    document.getElementById("customerTable").innerHTML = data.items.map(item => `<tr onclick="location.href='/customers/${BO.escape(item.customerId)}/summary?baseYm=${item.baseYm}'"><td>${BO.escape(item.customerId)}</td><td>${item.baseYm}</td><td>${BO.escape(analysisStatusName(item.analysisStatus))}</td><td><span class="badge">${BO.escape(item.riskGradeName || '-')}</span></td><td>${BO.percent(item.hazard1m)}</td><td>${BO.percent(item.hazard2m)}</td><td>${BO.percent(item.hazard3m)}</td><td>${BO.escape(item.primaryRiskFactor || '-')}</td></tr>`).join("") || '<tr><td colspan="8">조회 결과가 없습니다.</td></tr>';
+    document.getElementById("customerTable").innerHTML = data.items.map(item => `<tr onclick="location.href='/customers/${BO.escape(item.customerId)}/summary?baseYm=${item.baseYm}'"><td>${BO.escape(item.customerId)}</td><td>${BO.escape(item.displayName || '-')}</td><td>${item.baseYm}</td><td>${BO.escape(analysisStatusName(item.analysisStatus))}</td><td><span class="badge">${BO.escape(item.riskGradeName || '-')}</span></td><td>${BO.percent(item.hazard1m)}</td><td>${BO.percent(item.hazard2m)}</td><td>${BO.percent(item.hazard3m)}</td><td>${BO.escape(modelFeatureLabel(item.primaryRiskFactor))}</td></tr>`).join("") || '<tr><td colspan="9">조회 결과가 없습니다.</td></tr>';
+}
+
+/** 구버전 공통 스크립트가 캐시돼 있어도 고객 목록 렌더링을 중단하지 않는다. */
+function modelFeatureLabel(value) {
+    return typeof BO.modelFeatureLabel === "function" ? BO.modelFeatureLabel(value) : value || "-";
 }
 
 /** 분석 상태 코드에 대응하는 한글 표시명을 반환한다. */

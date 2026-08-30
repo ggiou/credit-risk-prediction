@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -79,12 +81,32 @@ public class GlobalExceptionHandler {
      * @return 공통 오류 응답
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleUnexpectedException(
+    public Object handleUnexpectedException(
             Exception exception, HttpServletRequest request) {
         // 실패 원인은 서버 로그에만 기록하고 SQL·인증 정보는 화면 응답에 노출하지 않는다.
         log.error("처리되지 않은 서버 오류가 발생했습니다.", exception);
+        if (acceptsHtml(request)) {
+            return new ModelAndView(
+                    "error/500",
+                    Map.of("requestId", requestId(request)),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(errorBody("INTERNAL_SERVER_ERROR", "요청 처리 중 오류가 발생했습니다.", Map.of(), request));
+    }
+
+    /** 존재하지 않는 정적 리소스 요청을 서버 오류와 구분한다. */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public Object handleNoResourceFoundException(
+            NoResourceFoundException exception, HttpServletRequest request) {
+        if (acceptsHtml(request)) {
+            return new ModelAndView(
+                    "error/404",
+                    Map.of("requestId", requestId(request)),
+                    HttpStatus.NOT_FOUND);
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(errorBody("RESOURCE_NOT_FOUND", "요청한 리소스를 찾을 수 없습니다.", Map.of(), request));
     }
 
     /**
@@ -104,5 +126,17 @@ public class GlobalExceptionHandler {
         body.put("timestamp", Instant.now());
         body.put("requestId", request.getAttribute(RequestIdFilter.ATTRIBUTE_NAME));
         return body;
+    }
+
+    /** 브라우저의 HTML 페이지 요청인지 확인한다. */
+    private boolean acceptsHtml(HttpServletRequest request) {
+        String accept = request.getHeader("Accept");
+        return accept != null && accept.contains("text/html");
+    }
+
+    /** 오류 화면에 표시할 요청 ID를 null 없이 반환한다. */
+    private String requestId(HttpServletRequest request) {
+        Object value = request.getAttribute(RequestIdFilter.ATTRIBUTE_NAME);
+        return value == null ? "-" : String.valueOf(value);
     }
 }
