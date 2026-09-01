@@ -19,4 +19,4 @@
 </div>
 <div class="summary-page-action"><a class="primary-link" href="${pageContext.request.contextPath}/customers/${customerId}/ai-analysis">AI 분석 상세 보기</a></div>
 <p id="pageError" class="error-message" hidden></p>
-</main></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260830-3"></script><script src="${pageContext.request.contextPath}/js/customer-detail.js?v=20260830-5"></script></body></html>
+</main></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260830-3"></script><script src="${pageContext.request.contextPath}/js/customer-detail.js?v=20260901-1"></script></body></html>
