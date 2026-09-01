@@ -202,22 +202,63 @@ function clearPageError() {
 
 /** 예측 상세 응답을 위험률, 주요 요인, 설명 영역에 렌더링한다. */
 function renderPrediction(data) {
+    setPredictionResultVisible(true);
     renderHazards(data.risk);
     document.getElementById("predictionRiskGrade").textContent = data.risk.riskGradeName || "-";
     renderRiskPercentile(data.risk.percentile);
     renderRiskFactors(data.riskFactors);
-    document.getElementById("explanation").textContent = data.explanation || (data.llm.status === "FAILED" ? "위험률은 계산됐지만 LLM 설명 생성에 실패했습니다." : "설명 생성이 요청되지 않았습니다.");
+    renderExplanation(data.explanation, data.llm.status);
     document.getElementById("modelMeta").innerHTML = `<span>모델 ${BO.escape(data.modelVersion)}</span><span>피처 ${BO.escape(data.featureSchemaVersion)}</span><span>LLM ${BO.escape(llmStatusName(data.llm.status))}</span>`;
 }
 
 /** 분석하지 않은 기준월로 이동했을 때 이전 월 결과를 모두 비운다. */
 function renderEmptyPrediction() {
-    renderHazards({hazard1m: null, hazard2m: null, hazard3m: null});
-    document.getElementById("predictionRiskGrade").textContent = "-";
-    renderRiskPercentile(null);
-    renderRiskFactors([]);
-    document.getElementById("explanation").textContent = "선택한 기준월에는 아직 실행된 분석이 없습니다.";
-    document.getElementById("modelMeta").innerHTML = "";
+    setPredictionResultVisible(false);
+}
+
+/** 미분석 기준월에는 빈 결과 카드 대신 분석 전 안내만 표시한다. */
+function setPredictionResultVisible(available) {
+    document.getElementById("predictionEmptyState").hidden = available;
+    document.getElementById("predictionResult").hidden = !available;
+}
+
+/** LLM의 줄 단위 설명을 HTML 문자열로 신뢰하지 않고 안전한 목록으로 렌더링한다. */
+function renderExplanation(explanation, status, emptyMessage) {
+    const container = document.getElementById("explanation");
+    const intro = document.getElementById("explanationIntro");
+    const note = document.getElementById("explanationNote");
+    const lines = explanation == null ? [] : String(explanation)
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+    const available = lines.length > 0;
+
+    intro.hidden = !available;
+    note.hidden = !available;
+    container.classList.toggle("explanation-empty", !available);
+    if (!available) {
+        container.textContent = emptyMessage || (status === "FAILED"
+            ? "위험률은 계산됐지만 AI 설명 생성에 실패했습니다."
+            : "설명 생성이 요청되지 않았습니다.");
+        return;
+    }
+
+    const structured = lines.length >= 3 && !/^[-•]\s*/.test(lines[0]);
+    if (!structured) {
+        container.innerHTML = `<ul class="explanation-list">${lines
+            .map(line => `<li>${BO.escape(line.replace(/^[-•]\s*/, ""))}</li>`)
+            .join("")}</ul>`;
+        return;
+    }
+
+    const summary = lines[0];
+    const interpretation = lines[lines.length - 1];
+    const changes = lines.slice(1, -1).map(line => line.replace(/^[-•]\s*/, ""));
+    container.innerHTML = `
+        <p class="explanation-summary">${BO.escape(summary)}</p>
+        <h3 class="explanation-subtitle">주요 변화</h3>
+        <ul class="explanation-list">${changes.map(item => `<li>${BO.escape(item)}</li>`).join("")}</ul>
+        <div class="explanation-interpretation"><strong>모델 해석</strong><p>${BO.escape(interpretation)}</p></div>`;
 }
 
 /** 월별 위험률 값과 세 기간 내 상대적인 막대 길이를 표시한다. */

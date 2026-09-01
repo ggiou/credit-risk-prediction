@@ -3,6 +3,12 @@
 <body data-page="ai-analysis" data-customer-id="${customerId}"><jsp:include page="../common/sidebar.jsp"/><div class="app-shell"><jsp:include page="../common/header.jsp"/><main>
 <jsp:include page="../common/customer-tabs.jsp"/>
 <div class="page-actions"><button id="runPrediction" class="primary">AI 분석 실행</button></div>
+<section id="predictionEmptyState" class="panel prediction-empty-state" hidden>
+    <span class="prediction-empty-icon" aria-hidden="true">AI</span>
+    <h2>아직 AI 분석 전입니다</h2>
+    <p>선택한 기준월에는 저장된 분석 결과가 없습니다.<br>AI 분석을 실행하면 월별 위험률과 모델 판단 지표를 확인할 수 있습니다.</p>
+</section>
+<div id="predictionResult" hidden>
 <div class="analysis-overview" aria-label="AI 연체 위험 분석 결과">
     <section class="panel hazard-panel">
         <div class="panel-title"><h2>향후 월별 연체 위험률 비교</h2><span class="comparison-badge">확대 비교</span></div>
@@ -37,5 +43,12 @@
     <p class="section-description">3개월 후 예측에서 모델 점수에 영향을 크게 준 입력 지표입니다. 실제 연체 원인이나 인과관계를 의미하지 않습니다.</p>
     <div id="riskFactors" class="risk-factor-list"></div>
 </section>
-<section class="panel"><h2>AI 설명</h2><p id="explanation" class="explanation">분석 결과가 없습니다.</p><div id="modelMeta" class="meta-row"></div></section><p id="pageError" class="error-message" hidden></p>
-</main></div><div id="predictionLoading" class="loading-overlay" role="status" aria-live="polite" aria-label="AI 분석 실행 중" hidden><div class="loading-dialog"><span class="loading-spinner" aria-hidden="true"></span><strong>AI 분석을 실행 중입니다.</strong><p>위험률과 주요 지표를 계산하고 있습니다.<br>잠시만 기다려 주세요.</p></div></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260830-3"></script><script src="${pageContext.request.contextPath}/js/customer-detail.js?v=20260830-5"></script></body></html>
+<section class="panel ai-explanation-panel">
+    <h2 class="ai-explanation-title">AI 설명 <small>(LightGBM 근거 기반)</small></h2>
+    <p id="explanationIntro" class="section-description" hidden>이 설명은 LightGBM 모델이 학습한 패턴과 고객의 최근 데이터를 기반으로 생성된 근거입니다.</p>
+    <div id="explanation" class="explanation explanation-empty">분석 결과가 없습니다.</div>
+    <p id="explanationNote" class="explanation-note" hidden>위 근거들은 연체 위험률 산정에 반영되었으며, AI 설명은 계산된 위험률과 위험등급을 변경하지 않습니다.</p>
+    <div id="modelMeta" class="meta-row"></div>
+</section>
+</div><p id="pageError" class="error-message" hidden></p>
+</main></div><div id="predictionLoading" class="loading-overlay" role="status" aria-live="polite" aria-label="AI 분석 실행 중" hidden><div class="loading-dialog"><span class="loading-spinner" aria-hidden="true"></span><strong>AI 분석을 실행 중입니다.</strong><p>위험률과 주요 지표를 계산하고 있습니다.<br>잠시만 기다려 주세요.</p></div></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260830-3"></script><script src="${pageContext.request.contextPath}/js/customer-detail.js?v=20260901-1"></script></body></html>
