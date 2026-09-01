@@ -116,7 +116,7 @@ public class PredictionCommandService {
         Map<String, Object> insertValues = toInsertValues(aiResponse);
 
         if (hasResult(reused)) {
-            // 예측 행은 새로 만들지 않고 실패·미요청 상태였던 LLM 결과만 안전하게 갱신한다.
+            // 예측 행은 새로 만들지 않고 실패·미요청·이전 프롬프트의 LLM 결과만 안전하게 갱신한다.
             long predictionId = ((Number) reused.get("predictionId")).longValue();
             insertValues.put("predictionId", predictionId);
             predictionMapper.updateRetriedExplanation(insertValues);
@@ -146,14 +146,15 @@ public class PredictionCommandService {
         return result != null && !result.isEmpty();
     }
 
-    /** 설명 요청인데 완료된 LLM 설명이 없으면 동일 피처로 설명 생성을 재시도한다. */
+    /** 설명 요청인데 완료 설명이 없거나 프롬프트 버전이 바뀌었으면 동일 피처로 설명 생성을 재시도한다. */
     private boolean needsExplanationRetry(Map<String, Object> result, boolean generateExplanation) {
         if (!generateExplanation) {
             return false;
         }
         boolean completed = LlmStatus.COMPLETED.name().equals(String.valueOf(result.get("llmStatus")));
         Object explanation = result.get("explanation");
-        return !completed || explanation == null || String.valueOf(explanation).isBlank();
+        boolean currentPrompt = promptVersion.equals(String.valueOf(result.get("promptVersion")));
+        return !completed || explanation == null || String.valueOf(explanation).isBlank() || !currentPrompt;
     }
 
     /** 기준년월이 일치하는 스냅샷 행을 찾는다. */

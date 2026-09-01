@@ -1088,7 +1088,117 @@ tbody tr:hover {
 .explanation {
     color: var(--text);
     line-height: 1.8;
-    white-space: pre-wrap;
+}
+
+.ai-explanation-title {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.ai-explanation-title small {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.explanation-list {
+    margin: 18px 0 0;
+    padding-left: 22px;
+}
+
+.explanation-summary {
+    margin: 16px 0 0;
+    padding: 16px 18px;
+    border-left: 3px solid var(--blue);
+    border-radius: 0 10px 10px 0;
+    background: #f4f7fd;
+    font-weight: 650;
+    line-height: 1.7;
+}
+
+.explanation-subtitle {
+    margin: 22px 0 0;
+    font-size: 14px;
+}
+
+.explanation-subtitle + .explanation-list {
+    margin-top: 10px;
+}
+
+.explanation-interpretation {
+    margin-top: 20px;
+    padding: 15px 17px;
+    border: 1px solid #dce6f7;
+    border-radius: 10px;
+    background: #f8faff;
+}
+
+.explanation-interpretation strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--blue);
+    font-size: 13px;
+}
+
+.explanation-interpretation p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.explanation-list li {
+    padding-left: 3px;
+    line-height: 1.75;
+}
+
+.explanation-list li + li {
+    margin-top: 8px;
+}
+
+.explanation-note {
+    margin: 22px 0 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.explanation-empty {
+    margin-top: 14px;
+    color: var(--muted);
+}
+
+.prediction-empty-state {
+    min-height: 320px;
+    padding: 64px 24px;
+    text-align: center;
+}
+
+.prediction-empty-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+    background: #edf3ff;
+    color: var(--blue);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.prediction-empty-state h2 {
+    margin: 20px 0 8px;
+}
+
+.prediction-empty-state p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.75;
 }
 
 .meta-row {

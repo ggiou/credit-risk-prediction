@@ -51,14 +51,14 @@ class PredictionCommandServiceTest {
                 aiPredictionClient,
                 new ObjectMapper(),
                 MODEL_VERSION,
-                "v1.0");
+                "v1.2");
         when(predictionMapper.findFeatureSnapshots(CUSTOMER_ID, BASE_YM, "201811"))
                 .thenReturn(List.of(currentSnapshot()));
     }
 
     @Test
     void reusesResultWhenCompletedExplanationExists() {
-        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명");
+        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명", "v1.2");
         PredictionDetailResponse detail = detail("COMPLETED", "완료된 설명");
         when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
         when(predictionQueryService.toDetail(reused)).thenReturn(detail);
@@ -73,7 +73,7 @@ class PredictionCommandServiceTest {
 
     @Test
     void retriesMissingExplanationWithoutCreatingAnotherPrediction() {
-        Map<String, Object> reused = reusedResult("FAILED", null);
+        Map<String, Object> reused = reusedResult("FAILED", null, "v1.0");
         when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
         when(aiPredictionClient.predict(anyMap())).thenReturn(successfulAiResponse());
         when(predictionQueryService.getById(20L)).thenReturn(detail("COMPLETED", "새 설명"));
@@ -93,6 +93,22 @@ class PredictionCommandServiceTest {
         verify(predictionMapper, never()).insertPrediction(anyMap());
     }
 
+    @Test
+    void regeneratesCompletedExplanationWhenPromptVersionChanges() {
+        Map<String, Object> reused = reusedResult("COMPLETED", "이전 형식 설명", "v1.0");
+        when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
+        when(aiPredictionClient.predict(anyMap())).thenReturn(successfulAiResponse());
+        when(predictionQueryService.getById(20L)).thenReturn(detail("COMPLETED", "새 목록형 설명"));
+
+        PredictionExecutionResponse response = service.execute(
+                CUSTOMER_ID, BASE_YM, true, "request-new-prompt");
+
+        verify(aiPredictionClient).predict(anyMap());
+        verify(predictionMapper).updateRetriedExplanation(anyMap());
+        assertThat(response.reused()).isTrue();
+        verify(predictionMapper, never()).insertPrediction(anyMap());
+    }
+
     private Map<String, Object> currentSnapshot() {
         return Map.of(
                 "featureSnapshotId", 10L,
@@ -101,11 +117,12 @@ class PredictionCommandServiceTest {
                 "features", "{}");
     }
 
-    private Map<String, Object> reusedResult(String llmStatus, String explanation) {
+    private Map<String, Object> reusedResult(String llmStatus, String explanation, String promptVersion) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("predictionId", 20L);
         result.put("llmStatus", llmStatus);
         result.put("explanation", explanation);
+        result.put("promptVersion", promptVersion);
         return result;
     }
 
@@ -124,7 +141,7 @@ class PredictionCommandServiceTest {
                         "percentile", 81.6),
                 "riskFactors", List.of(),
                 "explanation", "새 설명",
-                "llm", Map.of("status", "COMPLETED", "promptVersion", "v1.0"),
+                "llm", Map.of("status", "COMPLETED", "promptVersion", "v1.2"),
                 "predictedAt", "2026-09-01T00:00:00Z");
     }
 
@@ -146,7 +163,7 @@ class PredictionCommandServiceTest {
                         81.6),
                 List.of(),
                 explanation,
-                new PredictionDetailResponse.Llm(llmStatus, "v1.0"),
+                new PredictionDetailResponse.Llm(llmStatus, "v1.2"),
                 Instant.parse("2026-09-01T00:00:00Z"));
     }
 }
