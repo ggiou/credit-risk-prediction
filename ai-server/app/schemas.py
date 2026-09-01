@@ -16,7 +16,7 @@ class PredictRequest(BaseModel):
     previousFeatureSnapshotId: int | None = None
     featureSchemaVersion: str
     expectedModelVersion: str
-    promptVersion: str = "v1.0"
+    promptVersion: str = "v1.2"
     generateExplanation: bool = True
     currentFeatures: dict[str, Any]
     previousFeatures: dict[str, Any] | None = None

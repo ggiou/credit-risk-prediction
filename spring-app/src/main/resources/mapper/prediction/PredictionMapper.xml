@@ -193,6 +193,10 @@
             llm_status = #{llmStatus},
             prompt_version = #{promptVersion}
         WHERE prediction_id = #{predictionId}
-          AND (llm_status != 'COMPLETED' OR explanation IS NULL OR explanation = '')
+          AND (llm_status != 'COMPLETED'
+            OR explanation IS NULL
+            OR explanation = ''
+            OR prompt_version IS NULL
+            OR prompt_version != #{promptVersion})
     </update>
 </mapper>

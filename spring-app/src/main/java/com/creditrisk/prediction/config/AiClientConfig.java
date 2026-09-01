@@ -21,7 +21,7 @@ public class AiClientConfig {
     public RestClient aiRestClient(
             @Value("${ai.server.base-url}") String baseUrl,
             @Value("${ai.server.connect-timeout-seconds}") long connectTimeoutSeconds,
-            @Value("${ai.server.read-timeout-seconds}") long readTimeoutSeconds) {
+            @Value("${ai.server.read-timeout-seconds:0}") long readTimeoutSeconds) {
         // 외부 AI 서버 장애가 Spring 요청 스레드를 무기한 점유하지 않도록 두 타임아웃을 모두 설정한다.
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(connectTimeoutSeconds));
