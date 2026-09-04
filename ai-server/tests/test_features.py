@@ -1,3 +1,5 @@
+import math
+
 from app.features import derive_features
 
 
@@ -31,7 +33,7 @@ def test_derived_features_follow_spec_and_keep_missing_as_none():
     assert got["f_카드론증가"] == 60.0
     assert got["f_한도변화"] == 100.0
     assert got["f_잔액증가율"] == 0.6
-    assert got["f_사용률변화"] == 0.3
+    assert math.isclose(got["f_사용률변화"], 0.3)
     assert got["f_청구금액증가"] == 100.0
     assert got["f_카드가용비율"] == 0.75
 
@@ -41,3 +43,10 @@ def test_derived_features_follow_spec_and_keep_missing_as_none():
     )
     assert missing["f_사용률"] is None
     assert missing["f_잔액증가율"] is None
+
+
+def test_numeric_sentinel_string_is_missing_without_dropping_categories():
+    got = derive_features({"연령": "40대", "잔액_B0M": "-9999"}, None)
+
+    assert got["연령"] == "40대"
+    assert got["잔액_B0M"] is None
