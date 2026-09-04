@@ -5,7 +5,7 @@
         <img src="/images/logo.png" alt="서비스 로고">
     </span>
         <div>
-            <strong>미리봄</strong>
+            <strong>Miribom</strong>
             <small>Credit Risk BO</small>
         </div>
     </div>
@@ -17,4 +17,3 @@
         <a class="nav-item ${menu eq 'predictions' ? 'active' : ''}" href="${pageContext.request.contextPath}/predictions">예측 이력</a>
     </nav>
 </aside>
-

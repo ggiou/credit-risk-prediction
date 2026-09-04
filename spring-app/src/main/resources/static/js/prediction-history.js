@@ -1,8 +1,11 @@
 /** 전체 또는 특정 고객의 저장 예측 이력을 검색한다. */
 document.addEventListener("DOMContentLoaded", async () => {
     try {
-        await BO.loadBaseMonths(document.getElementById("baseYmSelect"), true);
-        const query = new URLSearchParams(location.search); if (query.get("customerId")) document.getElementById("customerId").value = query.get("customerId");
+        const baseYmSelect = document.getElementById("baseYmSelect");
+        await BO.loadBaseMonths(baseYmSelect, true);
+        const query = new URLSearchParams(location.search);
+        const customerId = query.get("customerId");
+        if (customerId) document.getElementById("customerId").value = customerId;
         document.getElementById("historyForm").addEventListener("submit", event => { event.preventDefault(); searchHistory().catch(BO.showError); }); await searchHistory();
     } catch (error) { BO.showError(error); }
 });

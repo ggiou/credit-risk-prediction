@@ -93,6 +93,7 @@
         ORDER BY
         <choose>
             <when test="condition.sortField == 'customerId'">fs.customer_id</when>
+            <when test="condition.sortField == 'topRiskPercent'">pr.percentile</when>
             <when test="condition.sortField == 'hazard1m'">pr.hazard_1m</when>
             <when test="condition.sortField == 'hazard2m'">pr.hazard_2m</when>
             <when test="condition.sortField == 'riskChange3m'">riskChange3m</when>
@@ -103,6 +104,7 @@
             <when test="condition.sortDirection == 'ASC'">ASC</when>
             <otherwise>DESC</otherwise>
         </choose>
+        , fs.customer_id ASC
         LIMIT #{condition.size} OFFSET #{condition.offset}
     </select>
 
