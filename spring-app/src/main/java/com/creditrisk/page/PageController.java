@@ -76,6 +76,14 @@ public class PageController {
         return "customer/ai-analysis";
     }
 
+    /** 특정 고객의 월별 예측 추이와 전체 실행 이력 화면을 반환한다. */
+    @GetMapping("/customers/{customerId}/predictions")
+    public String customerPredictionHistory(@PathVariable String customerId, Model model) {
+        // 전역 이력 검색과 구분해 고객 상세 탭 문맥을 유지한다.
+        addCustomerModel(model, customerId, "predictions");
+        return "customer/prediction-history";
+    }
+
     /** 전체 고객 예측 이력 화면을 반환한다. */
     @GetMapping("/predictions")
     public String predictionHistory(Model model) {
@@ -92,4 +100,3 @@ public class PageController {
         model.addAttribute("activeTab", activeTab);
     }
 }
-

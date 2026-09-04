@@ -92,6 +92,7 @@
             AND previous_pr.model_version = #{modelVersion}
         WHERE fs.base_ym = #{baseYm}
           AND pr.model_version = #{modelVersion}
+          AND pr.risk_grade = 'WARNING'
         ORDER BY pr.hazard_3m DESC
         LIMIT #{limit}
     </select>

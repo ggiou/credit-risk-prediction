@@ -28,7 +28,7 @@ import java.util.Set;
 public class CustomerController {
 
     private static final Set<String> SORT_FIELDS = Set.of(
-            "customerId", "hazard1m", "hazard2m", "hazard3m", "riskChange3m", "predictedAt");
+            "customerId", "topRiskPercent", "hazard1m", "hazard2m", "hazard3m", "riskChange3m", "predictedAt");
 
     private final CustomerService customerService;
     private final CustomerDetailService customerDetailService;
@@ -135,7 +135,7 @@ public class CustomerController {
             @RequestParam(required = false) Double maxRiskRate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "hazard3m,desc") String sort,
+            @RequestParam(defaultValue = "customerId,asc") String sort,
             HttpServletRequest request) {
         // 잘못된 기간과 동적 정렬값은 Mapper를 호출하기 전에 차단한다.
         QueryValidator.validateBaseYm(baseYm);
