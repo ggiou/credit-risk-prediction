@@ -24,19 +24,24 @@ public class PredictionQueryService {
 
     private static final TypeReference<List<Map<String, Object>>> RISK_FACTOR_TYPE = new TypeReference<>() {
     };
+    private static final TypeReference<Map<String, Object>> LLM_OUTPUT_TYPE = new TypeReference<>() {
+    };
 
     private final PredictionMapper predictionMapper;
     private final ObjectMapper objectMapper;
     private final String modelVersion;
+    private final String promptVersion;
 
     /** 예측 조회 Mapper와 JSON 변환기를 주입받는다. */
     public PredictionQueryService(
             PredictionMapper predictionMapper,
             ObjectMapper objectMapper,
-            @Value("${ai.model.version}") String modelVersion) {
+            @Value("${ai.model.version}") String modelVersion,
+            @Value("${ai.model.prompt-version}") String promptVersion) {
         this.predictionMapper = predictionMapper;
         this.objectMapper = objectMapper;
         this.modelVersion = modelVersion;
+        this.promptVersion = promptVersion;
     }
 
     /**
@@ -92,12 +97,17 @@ public class PredictionQueryService {
                         doubleValue(row.get("cumulativeRisk3m")),
                         riskGrade,
                         riskGradeName,
+                        doubleValue(row.get("percentile")),
                         doubleValue(row.get("percentile"))),
                 parseReasons(row.get("reasons")),
                 nullableString(row.get("explanation")),
+                nullableString(row.get("recommendation")),
+                parseLlmOutput(row.get("llmOutput")),
                 new PredictionDetailResponse.Llm(
                         llmStatus,
-                        nullableString(row.get("promptVersion"))),
+                        nullableString(row.get("promptVersion")),
+                        promptVersion,
+                        !promptVersion.equals(nullableString(row.get("promptVersion")))),
                 instantValue(row.get("predictedAt")));
     }
 
@@ -115,6 +125,22 @@ public class PredictionQueryService {
             throw new BusinessException(
                     "INVALID_PREDICTION_DATA",
                     "저장된 주요 위험 요인 형식이 올바르지 않습니다.",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    Map.of());
+        }
+    }
+
+    /** DB의 검증 완료 LLM JSON을 구조화 응답으로 복원한다. */
+    private Map<String, Object> parseLlmOutput(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(String.valueOf(value), LLM_OUTPUT_TYPE);
+        } catch (JsonProcessingException exception) {
+            throw new BusinessException(
+                    "INVALID_PREDICTION_DATA",
+                    "저장된 LLM 구조화 결과 형식이 올바르지 않습니다.",
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     Map.of());
         }

@@ -17,6 +17,8 @@ public record PredictionDetailResponse(
         Risk risk,
         List<Map<String, Object>> riskFactors,
         String explanation,
+        String recommendation,
+        Map<String, Object> llmOutput,
         Llm llm,
         Instant predictedAt) {
 
@@ -28,12 +30,15 @@ public record PredictionDetailResponse(
             double cumulativeRisk3m,
             String riskGrade,
             String riskGradeName,
+            double topRiskPercent,
             double percentile) {
     }
 
     /** LLM 설명 생성 상태와 버전 정보다. */
     public record Llm(
             String status,
-            String promptVersion) {
+            String promptVersion,
+            String currentPromptVersion,
+            boolean outdated) {
     }
 }

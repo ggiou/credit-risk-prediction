@@ -51,14 +51,14 @@ class PredictionCommandServiceTest {
                 aiPredictionClient,
                 new ObjectMapper(),
                 MODEL_VERSION,
-                "v1.2");
+                "v3.1");
         when(predictionMapper.findFeatureSnapshots(CUSTOMER_ID, BASE_YM, "201811"))
                 .thenReturn(List.of(currentSnapshot()));
     }
 
     @Test
     void reusesResultWhenCompletedExplanationExists() {
-        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명", "v1.2");
+        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명", "v3.1");
         PredictionDetailResponse detail = detail("COMPLETED", "완료된 설명");
         when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
         when(predictionQueryService.toDetail(reused)).thenReturn(detail);
@@ -127,22 +127,55 @@ class PredictionCommandServiceTest {
     }
 
     private Map<String, Object> successfulAiResponse() {
-        return Map.of(
-                "customerId", CUSTOMER_ID,
-                "baseYm", BASE_YM,
-                "featureSnapshotId", 10L,
-                "modelVersion", MODEL_VERSION,
-                "prediction", Map.of(
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("customerId", CUSTOMER_ID);
+        response.put("baseYm", BASE_YM);
+        response.put("featureSnapshotId", 10L);
+        response.put("modelVersion", MODEL_VERSION);
+        response.put("predictionSource", "LIGHTGBM_JSON");
+        response.put("prediction", Map.of(
                         "hazard1m", 0.0000008466749669384437,
                         "hazard2m", 0.0000003988043456338314,
                         "hazard3m", 0.00000021807945963754698,
                         "cumulativeRisk3m", 0.0000014635581629951488,
                         "riskGrade", "NORMAL",
-                        "percentile", 81.6),
-                "riskFactors", List.of(),
-                "explanation", "새 설명",
-                "llm", Map.of("status", "COMPLETED", "promptVersion", "v1.2"),
-                "predictedAt", "2026-09-01T00:00:00Z");
+                        "topRiskPercent", 81.6,
+                        "percentile", 81.6));
+        response.put("riskFactors", List.of(Map.ofEntries(
+                Map.entry("reasonId", "R1"),
+                Map.entry("featureKey", "청구금액_B0"),
+                Map.entry("reasonMethod", "PREVIOUS_VALUE_COUNTERFACTUAL"),
+                Map.entry("evidenceFeatureKeys", List.of("청구금액_B0"))
+        )));
+        response.put("observedChanges", List.of(Map.of(
+                "signalId", "S1", "featureKeys", List.of("청구금액_B0"))));
+        response.put("explanation", "모델 요약\n\n주요 관찰 지표\n청구 부담 흐름\n당월 청구금액은 전월보다 0.13% 증가했습니다.\n당월 청구 흐름은 모델 비교 근거입니다.\n\n모델 근거 해석");
+        response.put("recommendation", "1. 다음 결제 예정 금액과 최근 납부 이력 확인");
+        response.put("llmOutput", Map.of(
+                "summary", "모델 요약",
+                "modelInterpretation", "모델 근거 해석",
+                "keyIndicators", List.of(Map.of(
+                        "title", "청구 부담 흐름",
+                        "fact", "당월 청구금액은 전월보다 0.13% 증가했습니다.",
+                        "interpretation", "당월 청구 흐름은 모델 비교 근거입니다.",
+                        "modelRelation", "RISK_DECREASE",
+                        "reasonIds", List.of("R1"),
+                        "signalIds", List.of("S1"),
+                        "featureKeys", List.of("청구금액_B0"))),
+                "changeContext", "",
+                "managementPriority", "ROUTINE_MONITORING",
+                "usedFeatureKeys", List.of("청구금액_B0"),
+                "usedReasonIds", List.of("R1"),
+                "usedSignalIds", List.of("S1"),
+                "generationMode", "FULL_ANALYSIS",
+                "reviewPoints", List.of(Map.of(
+                        "priority", 1,
+                        "text", "다음 결제 예정 금액과 최근 납부 이력 확인",
+                        "reasonIds", List.of("R1"),
+                        "signalIds", List.of("S1")))));
+        response.put("llm", Map.of("status", "COMPLETED", "promptVersion", "v3.1"));
+        response.put("predictedAt", "2026-09-01T00:00:00Z");
+        return response;
     }
 
     private PredictionDetailResponse detail(String llmStatus, String explanation) {
@@ -160,10 +193,13 @@ class PredictionCommandServiceTest {
                         0.0000014635581629951488,
                         "NORMAL",
                         "정상",
+                        81.6,
                         81.6),
                 List.of(),
                 explanation,
-                new PredictionDetailResponse.Llm(llmStatus, "v1.2"),
+                null,
+                null,
+                new PredictionDetailResponse.Llm(llmStatus, "v3.1", "v3.1", false),
                 Instant.parse("2026-09-01T00:00:00Z"));
     }
 }
