@@ -6,12 +6,13 @@ early-warning project.
 ## Runtime boundary
 
 - LightGBM JSON artifact: calculates risk.
-- Local feature contribution extraction: selects evidence from the model input.
-- OpenAI API: converts supplied risk/evidence into a short explanation only.
+- Previous-value counterfactual rescoring: ranks observed changes without claiming SHAP.
+- OpenAI API: selects backend-approved indicator candidates and writes their interpretation only.
 - Spring Boot: owns RDS access, result reuse/persistence, and browser-facing APIs.
 
 The LLM must not recalculate risk, invent customer circumstances, or generate
-recommendations in the MVP.
+product recommendations in the MVP. Review points are limited to backend-approved
+checks directly linked to model evidence.
 
 ## Model file
 
@@ -68,8 +69,13 @@ The POST contract follows `credit_risk_api_spec.md`:
 - optionally receives previous-month features;
 - calculates 11 derived features using the fixed Python formulas;
 - runs the same model at `horizon=1,2,3`;
-- returns risk rates, grade, percentile, and local risk factors;
-- makes at most one successful LLM explanation call (one retry only for failure);
+- returns monthly hazards, c3-based grade, top-risk percentage, and counterfactual reasons;
+- deterministically calculates observed changes, counterfactual rank differences,
+  pattern mappings, indicator candidates, and grade-based management priority;
+- stores validated `keyIndicators`, source IDs, and full structured output while
+  rendering legacy explanation/recommendation strings for compatibility;
+- makes one LLM explanation call, with one correction retry only when the returned JSON fails schema or content validation;
+- uses a 60-second OpenAI timeout by default and does not repeat network timeouts;
 - keeps LightGBM results even when the LLM fails.
 
 There is no rule-based prediction fallback. A missing, changed, or invalid model
