@@ -1084,6 +1084,55 @@ button:disabled {
     overflow: auto;
 }
 
+.customer-list-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable;
+}
+
+.customer-list-table {
+    width: 100%;
+    min-width: 1120px;
+    table-layout: fixed;
+}
+
+.customer-list-table .customer-column-id {
+    width: 130px;
+}
+
+.customer-list-table .customer-column-name {
+    width: 110px;
+}
+
+.customer-list-table .customer-column-month {
+    width: 90px;
+}
+
+.customer-list-table .customer-column-status {
+    width: 100px;
+}
+
+.customer-list-table .customer-column-grade {
+    width: 80px;
+}
+
+.customer-list-table .customer-column-hazard {
+    width: 105px;
+}
+
+.customer-list-table .customer-column-reason {
+    width: 295px;
+}
+
+.customer-list-table th:nth-child(n + 6):nth-child(-n + 8),
+.customer-list-table td:nth-child(n + 6):nth-child(-n + 8) {
+    width: 105px;
+    min-width: 105px;
+    font-variant-numeric: tabular-nums;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
