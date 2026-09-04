@@ -13,10 +13,10 @@ INSERT INTO member_snapshot (
     used_credit_card_count, credit_usage_amount_r3m
 )
 VALUES
-    ('SYN_123', '201811', 1, '30대', '가족형성기', 0, 41, 4, 4, 3, 2490000),
-    ('SYN_123', '201812', 1, '30대', '가족형성기', 0, 42, 4, 4, 3, 2840000),
-    ('SYN_456', '201812', 2, '40대', '가족성숙기', 0, 68, 3, 3, 2, 1620000),
-    ('SYN_789', '201812', 1, '20대', '사회초년기', 0, 18, 2, 2, 2, 980000)
+    ('SYN_123', '201811', 1, '30대', '2.가족형성기', 0, 41, 4, 4, 3, 2490000),
+    ('SYN_123', '201812', 1, '30대', '2.가족형성기', 0, 42, 4, 4, 3, 2840000),
+    ('SYN_456', '201812', 2, '40대', '5.자녀성장기(2)', 0, 68, 3, 3, 2, 1620000),
+    ('SYN_789', '201812', 1, '20대', '1.Single', 0, 18, 2, 2, 2, 980000)
 ON DUPLICATE KEY UPDATE credit_usage_amount_r3m = VALUES(credit_usage_amount_r3m);
 
 INSERT INTO credit_snapshot (
@@ -84,32 +84,5 @@ VALUES
     ))
 ON DUPLICATE KEY UPDATE feature_snapshot_id = feature_snapshot_id;
 
-INSERT INTO prediction_result (
-    feature_snapshot_id, model_version,
-    hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m, risk_grade, percentile,
-    reasons, explanation, llm_status, prompt_version, predicted_at
-)
-SELECT feature_snapshot_id,
-       'miribom-lgbm-v0.3',
-       CASE customer_id WHEN 'SYN_123' THEN 0.481 WHEN 'SYN_789' THEN 0.214 ELSE 0.082 END,
-       CASE customer_id WHEN 'SYN_123' THEN 0.624 WHEN 'SYN_789' THEN 0.296 ELSE 0.124 END,
-       CASE customer_id WHEN 'SYN_123' THEN 0.781 WHEN 'SYN_789' THEN 0.387 ELSE 0.181 END,
-       CASE customer_id WHEN 'SYN_123' THEN 0.846 WHEN 'SYN_789' THEN 0.531 ELSE 0.329 END,
-       CASE customer_id WHEN 'SYN_123' THEN 'WARNING' WHEN 'SYN_789' THEN 'CAUTION' ELSE 'NORMAL' END,
-       CASE customer_id WHEN 'SYN_123' THEN 96.3 WHEN 'SYN_789' THEN 78.2 ELSE 34.1 END,
-       CASE customer_id
-           WHEN 'SYN_123' THEN JSON_ARRAY(JSON_OBJECT(
-               'featureKey', 'f_사용률', 'displayName', '카드 한도 사용률',
-               'direction', 'INCREASE', 'previousValue', 1.0788, 'currentValue', 1.284,
-               'changeValue', 0.2052, 'changeRate', 0.1902, 'unit', 'RATIO', 'contribution', 0.128
-           ))
-           ELSE JSON_ARRAY()
-       END,
-       CASE customer_id
-           WHEN 'SYN_123' THEN '카드 한도 사용률과 현금서비스 잔액이 전월보다 증가했습니다. 제공된 지표 변화가 향후 연체 위험 증가 요인으로 반영됐습니다.'
-           ELSE '현재 제공된 카드 이용 및 상환 지표에서 큰 위험 변화는 확인되지 않았습니다.'
-       END,
-       'COMPLETED', 'v1.0', CURRENT_TIMESTAMP
-FROM feature_snapshot
-WHERE base_ym = '201812'
-ON DUPLICATE KEY UPDATE predicted_at = VALUES(predicted_at);
+-- prediction_result는 실제 model_lgbm.json 실행 결과만 저장한다.
+-- 샘플 초기화 단계에서 위험률이나 모델 근거를 임의로 하드코딩하지 않는다.
