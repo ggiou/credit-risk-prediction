@@ -71,7 +71,7 @@ async function loadPage(page, customerId, baseYm) {
 
 /** 고객 상세 탭을 이동해도 현재 선택한 기준월을 유지한다. */
 function syncBaseMonthLinks(baseYm) {
-    document.querySelectorAll(".tabs a, .summary-page-action a").forEach(link => {
+    document.querySelectorAll('.tabs a:not([data-preserve-base-ym="false"]), .summary-page-action a').forEach(link => {
         const url = new URL(link.href, location.origin);
         if (baseYm) url.searchParams.set("baseYm", baseYm);
         else url.searchParams.delete("baseYm");
@@ -155,7 +155,7 @@ async function loadFinancial(customerId, baseYm, type) {
 async function loadAiAnalysis(customerId, baseYm) {
     const data = await BO.request(`/api/v1/customers/${customerId}/predictions/current?baseYm=${baseYm}`);
     if (data == null) {
-        renderEmptyPrediction();
+        renderEmptyPrediction(baseYm);
         return;
     }
     renderPrediction(data);
@@ -186,7 +186,12 @@ function setPredictionLoading(loading) {
     const select = document.getElementById("baseYmSelect");
     const overlay = document.getElementById("predictionLoading");
     button.disabled = loading;
-    button.textContent = loading ? "분석 중..." : "AI 분석 실행";
+    if (loading) {
+        button.dataset.idleLabel = button.textContent;
+        button.textContent = "분석 중...";
+    } else if (button.textContent === "분석 중...") {
+        button.textContent = button.dataset.idleLabel || "AI 분석 시작";
+    }
     select.disabled = loading;
     overlay.hidden = !loading;
     document.body.classList.toggle("is-loading", loading);
@@ -202,31 +207,58 @@ function clearPageError() {
 
 /** 예측 상세 응답을 위험률, 주요 요인, 설명 영역에 렌더링한다. */
 function renderPrediction(data) {
-    setPredictionResultVisible(true);
+    setPredictionResultVisible(true, data.llm);
     renderHazards(data.risk);
     document.getElementById("predictionRiskGrade").textContent = data.risk.riskGradeName || "-";
-    renderRiskPercentile(data.risk.percentile);
+    renderRiskPercentile(data.risk.topRiskPercent ?? data.risk.percentile);
     renderRiskFactors(data.riskFactors);
-    renderExplanation(data.explanation, data.llm.status);
+    renderExplanation(data.explanation, data.llm.status, data.llmOutput, data.recommendation);
     document.getElementById("modelMeta").innerHTML = `<span>모델 ${BO.escape(data.modelVersion)}</span><span>피처 ${BO.escape(data.featureSchemaVersion)}</span><span>LLM ${BO.escape(llmStatusName(data.llm.status))}</span>`;
 }
 
 /** 분석하지 않은 기준월로 이동했을 때 이전 월 결과를 모두 비운다. */
-function renderEmptyPrediction() {
+function renderEmptyPrediction(baseYm) {
+    document.getElementById("predictionEmptyBaseYm").textContent = formatBaseMonth(baseYm);
     setPredictionResultVisible(false);
 }
 
 /** 미분석 기준월에는 빈 결과 카드 대신 분석 전 안내만 표시한다. */
-function setPredictionResultVisible(available) {
+function setPredictionResultVisible(available, llm) {
+    const actions = document.getElementById("predictionPageActions");
+    const button = document.getElementById("runPrediction");
     document.getElementById("predictionEmptyState").hidden = available;
     document.getElementById("predictionResult").hidden = !available;
+    if (!available) {
+        actions.hidden = false;
+        button.textContent = "AI 분석 시작";
+        return;
+    }
+    if (llm?.status === "FAILED" || llm?.status === "NOT_REQUESTED") {
+        actions.hidden = false;
+        button.textContent = llm.status === "FAILED" ? "AI 설명 다시 생성" : "AI 설명 생성";
+        return;
+    }
+    if (llm?.outdated) {
+        actions.hidden = false;
+        button.textContent = "AI 설명 업데이트";
+        return;
+    }
+    actions.hidden = true;
+}
+
+/** YYYYMM 기준월을 관리자 화면에서 읽기 쉬운 형식으로 표시한다. */
+function formatBaseMonth(baseYm) {
+    const value = baseYm == null ? "" : String(baseYm);
+    return /^\d{6}$/.test(value) ? `${value.slice(0, 4)}년 ${Number(value.slice(4))}월` : "기준월 미선택";
 }
 
 /** LLM의 줄 단위 설명을 HTML 문자열로 신뢰하지 않고 안전한 목록으로 렌더링한다. */
-function renderExplanation(explanation, status, emptyMessage) {
+function renderExplanation(explanation, status, llmOutput, recommendation, emptyMessage) {
     const container = document.getElementById("explanation");
     const intro = document.getElementById("explanationIntro");
     const note = document.getElementById("explanationNote");
+    const review = document.getElementById("reviewPoints");
+    const indicatorContainer = document.getElementById("keyIndicators");
     const lines = explanation == null ? [] : String(explanation)
         .split(/\r?\n/)
         .map(line => line.trim())
@@ -234,12 +266,86 @@ function renderExplanation(explanation, status, emptyMessage) {
     const available = lines.length > 0;
 
     intro.hidden = !available;
-    note.hidden = !available;
+    note.hidden = false;
     container.classList.toggle("explanation-empty", !available);
+    const structuredReviewPoints = Array.isArray(llmOutput?.reviewPoints) ? llmOutput.reviewPoints : [];
+    const legacyReviewPoints = recommendation == null ? [] : String(recommendation)
+        .split(/\r?\n/).map(value => value.replace(/^\d+\.\s*/, "").trim()).filter(Boolean);
+    const reviewPoints = structuredReviewPoints.length
+        ? structuredReviewPoints.map(point => point.text)
+        : legacyReviewPoints;
+    review.hidden = reviewPoints.length === 0;
+    review.innerHTML = reviewPoints.length ? `<h3>우선 확인 항목</h3><ol>${reviewPoints
+        .map(point => `<li>${BO.escape(point)}</li>`).join("")}</ol>` : "";
+    indicatorContainer.hidden = true;
+    indicatorContainer.innerHTML = "";
     if (!available) {
         container.textContent = emptyMessage || (status === "FAILED"
             ? "위험률은 계산됐지만 AI 설명 생성에 실패했습니다."
             : "설명 생성이 요청되지 않았습니다.");
+        return;
+    }
+
+    if (llmOutput && typeof llmOutput === "object") {
+        const context = String(llmOutput.changeContext || "").trim();
+        const indicators = Array.isArray(llmOutput.keyIndicators) ? llmOutput.keyIndicators : [];
+        const priorityLabels = {
+            ROUTINE_MONITORING: "정기 모니터링",
+            ENHANCED_MONITORING: "강화 모니터링",
+            PRIORITY_REVIEW: "우선 검토",
+            URGENT_REVIEW: "긴급 검토"
+        };
+        const relationLabels = {
+            RISK_INCREASE: "위험 증가",
+            RISK_DECREASE: "위험 감소",
+            MIXED: "혼재",
+            CONTEXT: "참고"
+        };
+        const managementPriority = String(llmOutput.managementPriority || "");
+        const priorityBadge = priorityLabels[managementPriority]
+            ? `<span class="management-priority priority-${managementPriority.toLowerCase()}">${priorityLabels[managementPriority]}</span>`
+            : "";
+        const indicatorCards = indicators.length ? `
+            <div class="key-indicator-section">
+                <div class="key-indicator-section-heading">
+                    <div>
+                        <h3>주요 관찰 지표</h3>
+                        <p>지표를 선택하면 구체적인 변화와 모델 해석을 확인할 수 있습니다.</p>
+                    </div>
+                    <span>${indicators.length}개 지표</span>
+                </div>
+                <div class="key-indicator-list">${indicators.map(indicator => {
+                    const relation = String(indicator.modelRelation || "CONTEXT");
+                    return `<details class="key-indicator-card relation-${relation.toLowerCase()}">
+                        <summary class="key-indicator-heading">
+                            <span class="key-indicator-title">
+                                <i aria-hidden="true"></i>
+                                <span><strong>${BO.escape(indicator.title || "주요 지표")}</strong><small>상세 근거 펼쳐보기</small></span>
+                            </span>
+                            <span class="key-indicator-summary-meta">
+                                <span class="key-indicator-relation">${BO.escape(relationLabels[relation] || "참고")}</span>
+                                <i class="key-indicator-chevron" aria-hidden="true"></i>
+                            </span>
+                        </summary>
+                        <div class="key-indicator-content">
+                            <div class="key-indicator-detail key-indicator-fact">
+                                <strong>관찰 사실</strong>
+                                <p>${renderSentenceLines(indicator.fact)}</p>
+                            </div>
+                            <div class="key-indicator-detail key-indicator-interpretation">
+                                <strong>모델 해석</strong>
+                                <p>${renderSentenceLines(indicator.interpretation)}</p>
+                            </div>
+                        </div>
+                    </details>`;
+                }).join("")}</div>
+            </div>` : "";
+        indicatorContainer.hidden = !indicatorCards;
+        indicatorContainer.innerHTML = indicatorCards;
+        container.innerHTML = `
+            <div class="explanation-current-state"><div><strong>현재 상태</strong>${priorityBadge}</div><p class="explanation-summary">${renderSentenceLines(llmOutput.summary)}</p></div>
+            <div class="explanation-interpretation"><strong>모델 해석</strong><p>${renderSentenceLines(llmOutput.modelInterpretation)}</p></div>
+            ${context ? `<div class="explanation-interpretation"><strong>변화 맥락</strong><p>${renderSentenceLines(context)}</p></div>` : ""}`;
         return;
     }
 
@@ -259,6 +365,11 @@ function renderExplanation(explanation, status, emptyMessage) {
         <h3 class="explanation-subtitle">주요 변화</h3>
         <ul class="explanation-list">${changes.map(item => `<li>${BO.escape(item)}</li>`).join("")}</ul>
         <div class="explanation-interpretation"><strong>모델 해석</strong><p>${BO.escape(interpretation)}</p></div>`;
+}
+
+/** 구조화된 LLM 원문은 보존하면서 문장 종결 기호 뒤를 화면에서만 줄바꿈한다. */
+function renderSentenceLines(value) {
+    return BO.escape(value || "").replace(/([.!?])\s+/g, "$1<br>");
 }
 
 /** 월별 위험률 값과 세 기간 내 상대적인 막대 길이를 표시한다. */
@@ -286,7 +397,7 @@ function renderHazards(risk) {
         : "-";
 }
 
-/** 모델의 상위 위험 백분율을 낮은 위험부터 세는 일반 백분위로 변환해 표시한다. */
+/** 모델의 고위험 상위 비율을 그대로 표시한다. 값이 작을수록 더 위험하다. */
 function renderRiskPercentile(value) {
     const riskPercentile = toRiskPercentile(value);
     const label = document.getElementById("riskPercentile");
@@ -298,32 +409,32 @@ function renderRiskPercentile(value) {
         level.textContent = "-";
         level.className = "risk-level risk-level-neutral";
         marker.hidden = true;
-        tooltip.textContent = "상대적 위험 위치를 표시할 수 없습니다. 실제 연체 확률이 아닙니다.";
+        tooltip.textContent = "위험 상위 비율을 표시할 수 없습니다. 실제 연체 확률이 아닙니다.";
         return;
     }
     const formatted = riskPercentile.toLocaleString("ko-KR", {maximumFractionDigits: 1});
     const relativeLevel = relativeRiskLevel(riskPercentile);
-    label.textContent = `${formatted} 백분위`;
+    label.textContent = `위험 상위 ${formatted}%`;
     level.textContent = relativeLevel.label;
     level.className = `risk-level ${relativeLevel.className}`;
     marker.hidden = false;
-    marker.style.left = `${riskPercentile}%`;
-    tooltip.textContent = `위험도가 낮은 고객부터 비교한 상대적 위치입니다. 이 고객보다 위험도가 낮거나 같은 고객이 약 ${formatted}%입니다. 실제 연체 확률이 아닙니다.`;
+    marker.style.left = `${100 - riskPercentile}%`;
+    tooltip.textContent = `10만 명 비교군에서 위험 상위 ${formatted}%입니다. 값이 작을수록 더 위험하며, 실제 연체 확률이 아닙니다.`;
 }
 
-/** 모델의 고위험 순위 백분율을 화면용 일반 위험 백분위로 변환한다. */
+/** 모델의 고위험 상위 비율을 검증한다. */
 function toRiskPercentile(value) {
     const upperRiskPercentile = Number(value);
     if (value == null || value === "" || !Number.isFinite(upperRiskPercentile)
             || upperRiskPercentile < 0 || upperRiskPercentile > 100) return null;
-    return 100 - upperRiskPercentile;
+    return upperRiskPercentile;
 }
 
-/** 상대 위험 백분위를 사분위 기준의 직관적인 세 구간으로 요약한다. */
+/** 상위 위험 비율을 직관적인 세 구간으로 요약한다. */
 function relativeRiskLevel(percentile) {
-    if (percentile < 25) return {label: "낮은 편", className: "risk-level-low"};
-    if (percentile < 75) return {label: "평균 수준", className: "risk-level-medium"};
-    return {label: "높은 편", className: "risk-level-high"};
+    if (percentile <= 25) return {label: "높은 편", className: "risk-level-high"};
+    if (percentile <= 75) return {label: "평균 수준", className: "risk-level-medium"};
+    return {label: "낮은 편", className: "risk-level-low"};
 }
 
 /** 백분위 설명을 마우스, 키보드, 터치에서 동일하게 열고 닫는다. */

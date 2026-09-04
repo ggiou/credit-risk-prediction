@@ -11,6 +11,8 @@ import com.creditrisk.prediction.mapper.PredictionMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * 고객 피처 조회, 스냅샷·모델 기준 결과 재사용, FastAPI 호출, 예측 저장을 순서대로 수행한다.
@@ -32,9 +36,23 @@ import java.util.Map;
 @Service
 public class PredictionCommandService {
 
+    private static final Logger log = LoggerFactory.getLogger(PredictionCommandService.class);
+
     private static final DateTimeFormatter BASE_YM_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
     private static final TypeReference<Map<String, Object>> FEATURE_TYPE = new TypeReference<>() {
     };
+    private static final Set<String> LLM_OUTPUT_KEYS = Set.of(
+            "summary", "modelInterpretation", "keyIndicators", "changeContext", "reviewPoints",
+            "managementPriority", "usedFeatureKeys", "usedReasonIds", "usedSignalIds", "generationMode");
+    private static final Set<String> INDICATOR_KEYS = Set.of(
+            "title", "fact", "interpretation", "modelRelation", "reasonIds", "signalIds", "featureKeys");
+    private static final Set<String> MODEL_RELATIONS = Set.of(
+            "RISK_INCREASE", "RISK_DECREASE", "MIXED", "CONTEXT");
+    private static final Map<String, String> MANAGEMENT_PRIORITY_BY_GRADE = Map.of(
+            "NORMAL", "ROUTINE_MONITORING",
+            "INTEREST", "ENHANCED_MONITORING",
+            "CAUTION", "PRIORITY_REVIEW",
+            "WARNING", "URGENT_REVIEW");
 
     private final PredictionMapper predictionMapper;
     private final CustomerDetailService customerDetailService;
@@ -112,7 +130,20 @@ public class PredictionCommandService {
                 currentFeatures,
                 previousFeatures);
         Map<String, Object> aiResponse = aiPredictionClient.predict(aiRequest);
-        validateAiResponse(aiResponse, customerId, baseYm, featureSnapshotId);
+        try {
+            validateAiResponse(aiResponse, customerId, baseYm, featureSnapshotId);
+        } catch (BusinessException exception) {
+            log.error(
+                    "AI 서버 응답 계약 검증에 실패했습니다. requestId={} customerId={} baseYm={} featureSnapshotId={} code={} message={}",
+                    requestId,
+                    customerId,
+                    baseYm,
+                    featureSnapshotId,
+                    exception.getCode(),
+                    exception.getMessage(),
+                    exception);
+            throw exception;
+        }
         Map<String, Object> insertValues = toInsertValues(aiResponse);
 
         if (hasResult(reused)) {
@@ -230,6 +261,212 @@ public class PredictionCommandService {
                 throw invalidAiResponse("AI 서버 위험률 범위가 올바르지 않습니다.");
             }
         }
+        if (!"LIGHTGBM_JSON".equals(String.valueOf(response.get("predictionSource")))) {
+            throw invalidAiResponse("운영 저장이 허용되지 않은 예측 소스입니다.");
+        }
+        Object topRiskPercent = prediction.get("topRiskPercent");
+        Object percentile = prediction.get("percentile");
+        if (!(topRiskPercent instanceof Number topRisk)
+                || !(percentile instanceof Number legacyPercentile)
+                || topRisk.doubleValue() < 0 || topRisk.doubleValue() > 100
+                || Math.abs(topRisk.doubleValue() - legacyPercentile.doubleValue()) > 1e-12) {
+            throw invalidAiResponse("위험 상위 비율과 호환 percentile 값이 올바르지 않습니다.");
+        }
+        validateStructuredExplanation(response);
+    }
+
+    /** LLM 원본을 저장하기 전에 모델 근거·변화 신호의 참조 무결성을 다시 검증한다. */
+    @SuppressWarnings("unchecked")
+    private void validateStructuredExplanation(Map<String, Object> response) {
+        Object outputObject = response.get("llmOutput");
+        Map<String, Object> llm = response.get("llm") instanceof Map<?, ?> value
+                ? (Map<String, Object>) value : Map.of();
+        boolean completed = "COMPLETED".equals(String.valueOf(llm.get("status")));
+        if (outputObject == null) {
+            if (completed) {
+                throw invalidAiResponse("완료된 LLM 응답에 llmOutput이 없습니다.");
+            }
+            return;
+        }
+        if (!(outputObject instanceof Map<?, ?> rawOutput)) {
+            throw invalidAiResponse("llmOutput은 JSON 객체여야 합니다.");
+        }
+        Map<String, Object> output = (Map<String, Object>) rawOutput;
+        if (!output.keySet().equals(LLM_OUTPUT_KEYS)
+                || !(output.get("summary") instanceof String summary) || summary.isBlank()
+                || !(output.get("modelInterpretation") instanceof String interpretation) || interpretation.isBlank()
+                || !(output.get("changeContext") instanceof String changeContext)
+                || !"FULL_ANALYSIS".equals(output.get("generationMode"))) {
+            throw invalidAiResponse("llmOutput의 필수 문자열 또는 스키마가 올바르지 않습니다.");
+        }
+        Map<String, Object> prediction = response.get("prediction") instanceof Map<?, ?> value
+                ? (Map<String, Object>) value : Map.of();
+        String riskGrade = String.valueOf(prediction.get("riskGrade"));
+        if (!MANAGEMENT_PRIORITY_BY_GRADE.getOrDefault(riskGrade, "")
+                .equals(String.valueOf(output.get("managementPriority")))) {
+            throw invalidAiResponse("managementPriority가 모델 등급과 일치하지 않습니다.");
+        }
+        List<Map<String, Object>> reasons = response.get("riskFactors") instanceof List<?> list
+                ? (List<Map<String, Object>>) list : List.of();
+        List<Map<String, Object>> signals = response.get("observedChanges") instanceof List<?> list
+                ? (List<Map<String, Object>>) list : List.of();
+
+        Set<String> reasonIds = new HashSet<>();
+        Set<String> signalIds = new HashSet<>();
+        Set<String> featureKeys = new HashSet<>();
+        Map<String, Map<String, Object>> reasonsById = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> signalsById = new LinkedHashMap<>();
+        for (Map<String, Object> reason : reasons) {
+            if (reason.containsKey("contribution") || "horizon".equals(reason.get("featureKey"))) {
+                throw invalidAiResponse("실제 SHAP이 아닌 contribution 또는 horizon 근거를 저장할 수 없습니다.");
+            }
+            String reasonId = String.valueOf(reason.get("reasonId"));
+            reasonIds.add(reasonId);
+            reasonsById.put(reasonId, reason);
+            featureKeys.add(String.valueOf(reason.get("featureKey")));
+            if (reason.get("evidenceFeatureKeys") instanceof List<?> keys) {
+                keys.forEach(key -> featureKeys.add(String.valueOf(key)));
+            }
+        }
+        for (Map<String, Object> signal : signals) {
+            String signalId = String.valueOf(signal.get("signalId"));
+            signalIds.add(signalId);
+            signalsById.put(signalId, signal);
+            if (signal.get("featureKeys") instanceof List<?> keys) {
+                keys.forEach(key -> featureKeys.add(String.valueOf(key)));
+            }
+        }
+        validateReferences(output.get("usedFeatureKeys"), featureKeys, "feature key");
+        validateReferences(output.get("usedReasonIds"), reasonIds, "reason ID");
+        validateReferences(output.get("usedSignalIds"), signalIds, "signal ID");
+
+        if (!(output.get("keyIndicators") instanceof List<?> indicatorObjects)
+                || indicatorObjects.size() < 1 || indicatorObjects.size() > 4) {
+            throw invalidAiResponse("keyIndicators는 1~4개여야 합니다.");
+        }
+        Set<String> selectedReasonIds = new HashSet<>();
+        Set<String> selectedSignalIds = new HashSet<>();
+        Set<String> selectedFeatureKeys = new HashSet<>();
+        Set<String> indicatorFacts = new HashSet<>();
+        List<Map<String, Object>> indicators = new ArrayList<>();
+        for (Object indicatorObject : indicatorObjects) {
+            if (!(indicatorObject instanceof Map<?, ?> rawIndicator)) {
+                throw invalidAiResponse("keyIndicator 형식이 올바르지 않습니다.");
+            }
+            Map<String, Object> indicator = (Map<String, Object>) rawIndicator;
+            if (!indicator.keySet().equals(INDICATOR_KEYS)
+                    || !(indicator.get("title") instanceof String title) || title.isBlank()
+                    || !(indicator.get("fact") instanceof String fact) || fact.isBlank()
+                    || !(indicator.get("interpretation") instanceof String indicatorInterpretation)
+                    || indicatorInterpretation.isBlank()
+                    || !MODEL_RELATIONS.contains(String.valueOf(indicator.get("modelRelation")))) {
+                throw invalidAiResponse("keyIndicator의 필드가 올바르지 않습니다.");
+            }
+            if (!indicatorFacts.add(fact)) {
+                throw invalidAiResponse("동일한 keyIndicator를 중복 저장할 수 없습니다.");
+            }
+            validateReferences(indicator.get("reasonIds"), reasonIds, "indicator reason ID");
+            validateReferences(indicator.get("signalIds"), signalIds, "indicator signal ID");
+            validateReferences(indicator.get("featureKeys"), featureKeys, "indicator feature key");
+            selectedReasonIds.addAll(stringSet(indicator.get("reasonIds")));
+            selectedSignalIds.addAll(stringSet(indicator.get("signalIds")));
+            selectedFeatureKeys.addAll(stringSet(indicator.get("featureKeys")));
+            indicators.add(indicator);
+        }
+
+        if (!(output.get("reviewPoints") instanceof List<?> points) || points.size() > 2) {
+            throw invalidAiResponse("reviewPoints는 0~2개여야 합니다.");
+        }
+        if ("NORMAL".equals(riskGrade) && points.size() > 1) {
+            throw invalidAiResponse("정상 등급 reviewPoints는 최대 1개여야 합니다.");
+        }
+        if (!"NORMAL".equals(riskGrade) && points.isEmpty()) {
+            throw invalidAiResponse("정상 외 등급에는 reviewPoint가 필요합니다.");
+        }
+        int expectedPriority = 1;
+        for (Object pointObject : points) {
+            if (!(pointObject instanceof Map<?, ?> point)) {
+                throw invalidAiResponse("reviewPoint 형식이 올바르지 않습니다.");
+            }
+            if (!point.keySet().equals(Set.of("priority", "text", "reasonIds", "signalIds"))
+                    || !(point.get("priority") instanceof Number priority)
+                    || priority.intValue() != expectedPriority
+                    || !(point.get("text") instanceof String text) || text.isBlank()) {
+                throw invalidAiResponse("reviewPoint의 필드가 올바르지 않습니다.");
+            }
+            List<?> linkedReasons = point.get("reasonIds") instanceof List<?> values ? values : List.of();
+            List<?> linkedSignals = point.get("signalIds") instanceof List<?> values ? values : List.of();
+            if (linkedReasons.isEmpty() && linkedSignals.isEmpty()) {
+                throw invalidAiResponse("reviewPoint는 모델 근거 또는 변화 신호와 연결되어야 합니다.");
+            }
+            validateReferences(linkedReasons, reasonIds, "review reason ID");
+            validateReferences(linkedSignals, signalIds, "review signal ID");
+            selectedReasonIds.addAll(stringSet(linkedReasons));
+            selectedSignalIds.addAll(stringSet(linkedSignals));
+            for (String reasonId : stringSet(linkedReasons)) {
+                Map<String, Object> reason = reasonsById.get(reasonId);
+                selectedFeatureKeys.add(String.valueOf(reason.get("featureKey")));
+            }
+            for (String signalId : stringSet(linkedSignals)) {
+                selectedFeatureKeys.addAll(stringSet(signalsById.get(signalId).get("featureKeys")));
+            }
+            expectedPriority++;
+        }
+
+        if (!selectedReasonIds.equals(stringSet(output.get("usedReasonIds")))
+                || !selectedSignalIds.equals(stringSet(output.get("usedSignalIds")))
+                || !selectedFeatureKeys.equals(stringSet(output.get("usedFeatureKeys")))) {
+            throw invalidAiResponse("usedReasonIds, usedSignalIds, usedFeatureKeys가 실제 선택 근거와 일치하지 않습니다.");
+        }
+
+        StringBuilder indicatorSection = new StringBuilder("주요 관찰 지표");
+        for (Map<String, Object> indicator : indicators) {
+            indicatorSection.append("\n").append(indicator.get("title"))
+                    .append("\n").append(indicator.get("fact"))
+                    .append("\n").append(indicator.get("interpretation"));
+        }
+        String expectedExplanation = renderExplanationParagraph(summary) + "\n\n"
+                + renderExplanationParagraph(indicatorSection.toString()) + "\n\n"
+                + renderExplanationParagraph(interpretation)
+                + (changeContext.isBlank() ? "" : "\n\n" + renderExplanationParagraph(changeContext));
+        if (!expectedExplanation.equals(response.get("explanation"))) {
+            throw invalidAiResponse("explanation이 llmOutput의 종합 설명과 일치하지 않습니다.");
+        }
+        String expectedRecommendation = points.stream()
+                .map(point -> (Map<?, ?>) point)
+                .map(point -> String.valueOf(point.get("priority")) + ". " + String.valueOf(point.get("text")))
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse(null);
+        if (!expectedRecommendation.equals(response.get("recommendation"))) {
+            throw invalidAiResponse("recommendation이 llmOutput의 확인 항목과 일치하지 않습니다.");
+        }
+    }
+
+    /** LLM 원문 내용은 바꾸지 않고 문장 종결 기호 뒤만 화면용 줄바꿈으로 변환한다. */
+    private String renderExplanationParagraph(String value) {
+        return value.trim().replaceAll("(?<=[.!?])\\s+", "\n");
+    }
+
+    /** 문자열 배열이 허용된 입력 참조만 포함하는지 확인한다. */
+    private void validateReferences(Object values, Set<String> allowed, String label) {
+        if (!(values instanceof List<?> list)) {
+            throw invalidAiResponse(label + " 목록 형식이 올바르지 않습니다.");
+        }
+        Set<String> unique = new HashSet<>();
+        for (Object value : list) {
+            if (!(value instanceof String text) || !allowed.contains(value) || !unique.add(text)) {
+                throw invalidAiResponse("입력에 없는 " + label + " 참조가 있습니다.");
+            }
+        }
+    }
+
+    /** 검증된 문자열 배열을 집합 비교에 사용할 수 있도록 변환한다. */
+    private Set<String> stringSet(Object values) {
+        Set<String> result = new HashSet<>();
+        if (values instanceof List<?> list) {
+            list.forEach(value -> result.add(String.valueOf(value)));
+        }
+        return result;
     }
 
     /** 검증이 끝난 AI 응답을 예측 결과 INSERT 값으로 변환한다. */
@@ -253,6 +490,9 @@ public class PredictionCommandService {
         values.put("percentile", prediction.get("percentile"));
         values.put("reasons", writeJson(riskFactors));
         values.put("explanation", response.get("explanation"));
+        values.put("recommendation", response.get("recommendation"));
+        values.put("llmOutput", response.get("llmOutput") == null
+                ? null : writeJson(response.get("llmOutput")));
         values.put("llmStatus", llmStatusName(llm));
         values.put("promptVersion", llm.getOrDefault("promptVersion", promptVersion));
         values.put("predictedAt", Timestamp.from(parseInstant(response.get("predictedAt"))));

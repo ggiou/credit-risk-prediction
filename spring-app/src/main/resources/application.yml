@@ -27,8 +27,8 @@ ai:
   server:
     base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
     connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:2}
-    #read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:30} # ai response 대기시간 (디버깅 후 제거)
+    read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:75}
 
   model:
     version: ${AI_MODEL_VERSION:miribom-lgbm-v0.3}
-    prompt-version: ${AI_PROMPT_VERSION:v1.2}
+    prompt-version: ${AI_PROMPT_VERSION:v3.1}

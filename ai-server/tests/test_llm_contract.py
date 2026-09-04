@@ -1,88 +1,277 @@
+import copy
+import json
+import re
+from types import SimpleNamespace
+
 import pytest
 
 from app.llm import RiskExplanationClient
 
 
-def test_llm_validation_rejects_feature_not_sent_to_model():
-    client = object.__new__(RiskExplanationClient)
-    with pytest.raises(ValueError):
-        client._validate(
-            {
-                "summary": "모델 판단 요약",
-                "changeItems": ["입력 근거만 사용한 설명"],
-                "modelInterpretation": "전체 입력값 조합에 대한 모델 판단입니다.",
-                "usedFeatureKeys": ["not_supplied"],
-            },
-            {"f_사용률"},
-        )
-
-
-def test_llm_validation_accepts_only_allowed_keys():
-    client = object.__new__(RiskExplanationClient)
-    explanation, keys = client._validate(
-        {
-            "summary": "카드 한도 사용률 변화가 확인되었습니다.",
-            "changeItems": ["카드 한도 사용률은 전월보다 증가했습니다."],
-            "modelInterpretation": "현재 값은 위험 점수를 높이는 방향으로 반영됐으며 실제 연체 원인을 뜻하지 않습니다.",
-            "usedFeatureKeys": ["f_사용률"],
+def llm_input():
+    return {
+        "modelContext": {
+            "modelVersion": "miribom-lgbm-v0.3",
+            "promptVersion": "v3.1",
+            "predictionSource": "LIGHTGBM_JSON",
+            "dataType": "PUBLIC_SYNTHETIC_DEMO",
+            "target": "기준월 이후 1·2·3개월째 연체 발생 위험",
         },
-        {"f_사용률"},
-    )
-    assert explanation == (
-        "카드 한도 사용률 변화가 확인되었습니다.\n"
-        "- 카드 한도 사용률은 전월보다 증가했습니다.\n"
-        "현재 값은 위험 점수를 높이는 방향으로 반영됐으며 실제 연체 원인을 뜻하지 않습니다."
-    )
-    assert keys == ["f_사용률"]
-
-
-def test_llm_validation_rejects_duplicate_feature_keys():
-    client = object.__new__(RiskExplanationClient)
-    with pytest.raises(ValueError, match="must not contain duplicates"):
-        client._validate(
-            {
-                "summary": "모델 판단 요약",
-                "changeItems": ["첫 번째 설명", "두 번째 설명"],
-                "modelInterpretation": "전체 입력값 조합에 대한 모델 판단입니다.",
-                "usedFeatureKeys": ["f_사용률", "f_사용률"],
-            },
-            {"f_사용률"},
-        )
-
-
-def test_llm_validation_rejects_item_and_key_count_mismatch():
-    client = object.__new__(RiskExplanationClient)
-    with pytest.raises(ValueError, match="must have the same length"):
-        client._validate(
-            {
-                "summary": "모델 판단 요약",
-                "changeItems": ["첫 번째 설명", "두 번째 설명"],
-                "modelInterpretation": "전체 입력값 조합에 대한 모델 판단입니다.",
-                "usedFeatureKeys": ["첫번째피처"],
-            },
-            {"첫번째피처", "두번째피처"},
-        )
-
-
-def test_llm_validation_normalizes_item_markers_and_line_breaks():
-    client = object.__new__(RiskExplanationClient)
-    explanation, keys = client._validate(
-        {
-            "summary": "잔액과 청구 관련 지표가 함께 감소했습니다.",
-            "changeItems": [
-                "- 월중 평균잔액은 모델 판단에 반영되었습니다.",
-                "• 기준월 청구금액은 전월보다 감소했습니다.",
+        "prediction": {
+            "grade": "주의", "topRiskPercent": 0.33,
+            "monthlyHazards": [
+                {"month": 1, "value": 0.02786, "valueDisplay": "2.79%"},
+                {"month": 2, "value": 0.01332, "valueDisplay": "1.33%"},
+                {"month": 3, "value": 0.00733, "valueDisplay": "0.73%"},
             ],
-            "modelInterpretation": "현재 값들은 위험 점수를 높이는 방향으로 반영됐으며 실제 연체 원인을 뜻하지 않습니다.",
-            "usedFeatureKeys": ["월중평잔", "청구금액_B0"],
+            "peakHorizonMonth": 1, "horizonPattern": "FRONT_LOADED", "horizonEmphasis": "PEAK",
         },
-        {"월중평잔", "청구금액_B0"},
-    )
+        "managementPriority": "PRIORITY_REVIEW",
+        "generationMode": "FULL_ANALYSIS",
+        "modelReasons": [{
+            "reasonId": "R1", "featureKey": "f_카드가용비율", "displayName": "이용 가능 카드 비율",
+            "modelDirection": "INCREASE_RISK", "rank": 1,
+            "reasonMethod": "PREVIOUS_VALUE_COUNTERFACTUAL",
+            "currentValue": 0.0, "previousValue": 1.0, "changeValue": -1.0, "unit": "RATIO",
+            "counterfactualGrade": "정상", "currentTopRiskPercent": 0.33,
+            "counterfactualTopRiskPercent": 4.7, "topRiskPercentDifference": 4.37,
+            "counterfactualRiskDirection": "CURRENT_MORE_RISKY", "counterfactualGradeChanged": True,
+            "counterfactualComparisonStatement": (
+                "이용 가능 카드 비율을 전월값으로 되돌린 재채점의 위험 상위 비율은 "
+                "4.7%로 현재 0.33%와 4.37%p 차이입니다."
+            ),
+            "evidenceFeatureKeys": ["이용가능카드수_신용", "f_카드가용비율"],
+            "patternCode": "CREDIT_AVAILABILITY",
+        }],
+        "observedChanges": [{
+            "signalId": "S1", "statement": "최근 12개월 강제 한도 감액 횟수는 전월과 동일합니다.",
+            "featureKeys": ["강제한도감액횟수_R12M"], "relationToModel": "CONTEXT",
+        }],
+        "indicatorCandidates": [
+            {
+                "indicatorId": "K1", "title": "카드 이용 가능 상태",
+                "fact": (
+                    "이용 가능 카드 비율을 전월값으로 되돌린 재채점의 위험 상위 비율은 "
+                    "4.7%로 현재 0.33%와 4.37%p 차이입니다."
+                ),
+                "modelRelation": "RISK_INCREASE", "reasonIds": ["R1"], "signalIds": [],
+                "featureKeys": ["f_카드가용비율", "이용가능카드수_신용"],
+            },
+            {
+                "indicatorId": "K2", "title": "카드 이용 가능 상태",
+                "fact": "최근 12개월 강제 한도 감액 횟수는 전월과 동일합니다.",
+                "modelRelation": "CONTEXT", "reasonIds": [], "signalIds": ["S1"],
+                "featureKeys": ["강제한도감액횟수_R12M"],
+            },
+        ],
+        "allowedReviewChecks": ["강제 한도 감액 발생 시점과 사용 가능 카드 상태 확인"],
+    }
 
-    assert explanation == (
-        "잔액과 청구 관련 지표가 함께 감소했습니다.\n"
-        "- 월중 평균잔액은 모델 판단에 반영되었습니다.\n"
-        "- 기준월 청구금액은 전월보다 감소했습니다.\n"
-        "현재 값들은 위험 점수를 높이는 방향으로 반영됐으며 실제 연체 원인을 뜻하지 않습니다."
+
+def valid_output():
+    input_payload = llm_input()
+    indicators = []
+    for candidate, interpretation in zip(input_payload["indicatorCandidates"], (
+        "현재 카드 이용 가능 상태가 모델 순위에 영향을 준 비교 근거입니다.",
+        "기존 한도 감액 이력은 신규 발생과 구분해 확인해야 합니다.",
+    )):
+        indicator = {key: copy.deepcopy(value) for key, value in candidate.items() if key != "indicatorId"}
+        indicator["interpretation"] = interpretation
+        indicators.append(indicator)
+    return {
+        "summary": "모델 등급은 주의이며 위험 상위 0.33%입니다. 1개월 구간의 우선 검토가 필요합니다.",
+        "modelInterpretation": "모델은 카드 이용 가능 상태 패턴을 위험 증가 방향의 우선 근거로 포착했습니다.",
+        "keyIndicators": indicators,
+        "changeContext": "카드 이용 가능 상태와 기존 한도 조정 이력을 함께 점검할 필요가 있습니다.",
+        "reviewPoints": [{
+            "priority": 1, "text": "강제 한도 감액 발생 시점과 사용 가능 카드 상태 확인",
+            "reasonIds": ["R1"], "signalIds": ["S1"],
+        }],
+        "managementPriority": "PRIORITY_REVIEW",
+        "usedFeatureKeys": ["f_카드가용비율", "이용가능카드수_신용", "강제한도감액횟수_R12M"],
+        "usedReasonIds": ["R1"], "usedSignalIds": ["S1"], "generationMode": "FULL_ANALYSIS",
+    }
+
+
+def test_validation_accepts_structured_output_and_renders_legacy_explanation():
+    output = valid_output()
+    explanation, structured = object.__new__(RiskExplanationClient)._validate(output, llm_input())
+    indicator_section = "주요 관찰 지표\n" + "\n".join(
+        value for indicator in output["keyIndicators"]
+        for value in (indicator["title"], indicator["fact"], indicator["interpretation"])
     )
-    assert keys == ["월중평잔", "청구금액_B0"]
+    expected = "\n\n".join(
+        "\n".join(re.split(r"(?<=[.!?])\s+", value))
+        for value in (output["summary"], indicator_section, output["modelInterpretation"], output["changeContext"])
+    )
+    assert explanation == expected
+    assert structured["reviewPoints"][0]["reasonIds"] == ["R1"]
+
+
+def test_validation_removes_backend_fact_repeated_in_model_interpretation():
+    output = valid_output()
+    repeated_fact = output["keyIndicators"][0]["fact"]
+    output["modelInterpretation"] += " " + repeated_fact
+
+    explanation, structured = object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+    assert structured["modelInterpretation"] == (
+        "모델은 카드 이용 가능 상태 패턴을 위험 증가 방향의 우선 근거로 포착했습니다."
+    )
+    assert explanation.count(repeated_fact) == 1
+
+
+def test_validation_still_rejects_duplicate_llm_generated_sentences():
+    output = valid_output()
+    output["changeContext"] = output["modelInterpretation"]
+
+    with pytest.raises(ValueError, match="duplicate sentences"):
+        object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+
+def test_normal_low_stable_output_allows_no_review_point():
+    input_payload = llm_input()
+    input_payload["prediction"].update(grade="정상", topRiskPercent=98.7, horizonEmphasis="LOW_STABLE")
+    input_payload["managementPriority"] = "ROUTINE_MONITORING"
+    input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
+    input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
+    output = valid_output()
+    output["summary"] = "모델 등급은 정상이며 위험 상위 98.7%입니다. 세 기간의 위험값은 전반적으로 낮게 유지되어 정기 모니터링 대상입니다."
+    output["modelInterpretation"] = "모델은 카드 이용 가능 상태를 위험 완화 방향의 비교 근거로 포착했습니다."
+    output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
+    output["reviewPoints"] = []
+    output["managementPriority"] = "ROUTINE_MONITORING"
+
+    explanation, structured = object.__new__(RiskExplanationClient)._validate(output, input_payload)
+
+    assert "낮게 유지" in explanation
+    assert structured["reviewPoints"] == []
+
+
+def test_normal_priority_accepts_natural_routine_monitoring_synonym():
+    input_payload = llm_input()
+    input_payload["prediction"].update(grade="정상", topRiskPercent=98.7, horizonEmphasis="LOW_STABLE")
+    input_payload["managementPriority"] = "ROUTINE_MONITORING"
+    input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
+    input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
+    output = valid_output()
+    output["summary"] = "모델 등급은 정상이며 위험 상위 98.7%입니다. 세 기간의 위험값이 낮게 유지되어 관리 우선순위는 일상 모니터링입니다."
+    output["modelInterpretation"] = "모델은 카드 이용 가능 상태를 위험 완화 방향의 비교 근거로 포착했습니다."
+    output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
+    output["reviewPoints"] = []
+    output["managementPriority"] = "ROUTINE_MONITORING"
+
+    _, structured = object.__new__(RiskExplanationClient)._validate(output, input_payload)
+
+    assert structured["managementPriority"] == "ROUTINE_MONITORING"
+
+
+def test_validation_rejects_modified_indicator_fact():
+    output = valid_output()
+    output["keyIndicators"][0]["fact"] += " 임의 사실입니다."
+    with pytest.raises(ValueError, match="indicatorCandidates"):
+        object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+
+def test_validation_normalizes_unused_or_missing_source_references():
+    output = valid_output()
+    output["usedFeatureKeys"].remove("강제한도감액횟수_R12M")
+
+    _, structured = object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+    assert structured["usedFeatureKeys"] == [
+        "f_카드가용비율", "이용가능카드수_신용", "강제한도감액횟수_R12M"
+    ]
+
+
+def test_validation_rejects_risk_signal_when_all_reasons_mitigate_risk():
+    input_payload = llm_input()
+    input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
+    with pytest.raises(ValueError, match="risk-mitigating patterns"):
+        object.__new__(RiskExplanationClient)._validate(valid_output(), input_payload)
+
+
+def test_validation_rejects_counterfactual_disclaimer_rendered_by_ui():
+    output = valid_output()
+    output["modelInterpretation"] += " 해당 결과는 고객별 확정 원인이나 SHAP 기여가 아닙니다."
+    with pytest.raises(ValueError, match="rendered once by the UI"):
+        object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+
+def test_validation_rejects_noun_form_sentence_endings():
+    output = valid_output()
+    output["modelInterpretation"] = "모델은 카드 이용 가능 상태 패턴을 우선 근거로 포착함."
+    with pytest.raises(ValueError, match="polite Korean endings"):
+        object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda output: output.update(usedReasonIds=["R404"]), "unknown reason ID"),
+        (lambda output: output["reviewPoints"].extend(copy.deepcopy(output["reviewPoints"]) * 2), "zero to two"),
+        (lambda output: output.update(changeContext="c3 누적 위험은 12%입니다."), "c3/cumulative"),
+        (lambda output: output.update(modelInterpretation="horizon이 고객 위험 근거입니다."), "horizon"),
+        (lambda output: output.update(changeContext="이번 달 강제 한도 감액이 신규 발생했습니다."), "unchanged R12M"),
+        (lambda output: output.update(changeContext="생활고로 카드 사용 불능 상태입니다."), "unsupported circumstance"),
+        (lambda output: output.update(changeContext="최근 3개월 청구금액은 당월 1% 증가했습니다."), "R3M value"),
+        (lambda output: output.update(changeContext="관찰되지 않은 비율은 77.77%입니다."), "number not present"),
+        (lambda output: output.update(changeContext="전월보다 위험률이 1% 상승했습니다."), "model risk comparison"),
+        (lambda output: output.update(changeContext="시간이 지날수록 위험이 커집니다."), "time-horizon risk"),
+    ],
+)
+def test_validation_rejects_unsupported_output(mutate, message):
+    output = valid_output()
+    mutate(output)
+    with pytest.raises(ValueError, match=message):
+        object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+
+def test_timeout_fails_once_without_correction_retry():
+    class APITimeoutError(Exception):
+        pass
+
+    class TimeoutResponses:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            raise APITimeoutError("Request timed out")
+
+    responses = TimeoutResponses()
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.model = "test-model"
+    client.timeout_seconds = 60
+    result = client.generate(input_payload=llm_input())
+
+    assert result.status == "FAILED"
+    assert result.structured_output is None
+    assert result.error_message == "OpenAI 설명 요청이 60초 내 완료되지 않았습니다."
+    assert responses.calls == 1
+
+
+def test_validation_failure_gets_one_correction_retry():
+    invalid = valid_output()
+    invalid["usedReasonIds"] = ["R404"]
+
+    class ValidationResponses:
+        def __init__(self):
+            self.inputs = []
+
+        def create(self, **kwargs):
+            self.inputs.append(json.loads(kwargs["input"]))
+            payload = invalid if len(self.inputs) == 1 else valid_output()
+            return SimpleNamespace(output_text=json.dumps(payload, ensure_ascii=False))
+
+    responses = ValidationResponses()
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.model = "test-model"
+    client.timeout_seconds = 60
+    result = client.generate(input_payload=llm_input())
+
+    assert result.status == "COMPLETED"
+    assert len(responses.inputs) == 2
+    assert "unknown reason ID" in responses.inputs[1]["correction"]

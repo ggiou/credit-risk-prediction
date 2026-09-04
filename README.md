@@ -34,13 +34,11 @@ docker compose up --build
 - FastAPI 내부 문서: `http://localhost:8000/internal/docs`
 - MySQL: `localhost:3306`, 데이터베이스 `credit_risk`
 
-`docker-compose.yml`은 모델 파일이 없는 초기 화면 연동을 위해 규칙 기반 개발 모드를 켠다.
-이 값은 모델 결과가 아니며 제출·평가 환경에서 사용하면 안 된다. 실제 실행 전 아래 파일을 배치하고
-`AI_ALLOW_RULE_BASED_FALLBACK=false`로 변경한다.
+FastAPI는 전달된 JSON 모델만 실행하며 규칙 기반 대체 점수를 생성하지 않는다. 실제 실행 전
+아래 파일을 배치한다.
 
 ```text
-ai-server/models/miribom-lgbm-v0.3.txt
-ai-server/models/feature-order.json
+ai-server/models/model_lgbm.json
 ```
 
 LLM 설명을 사용하려면 저장소에 키를 기록하지 말고 환경변수로 전달한다.
@@ -48,6 +46,8 @@ LLM 설명을 사용하려면 저장소에 키를 기록하지 말고 환경변�
 ```bash
 export OPENAI_API_KEY="..."
 export OPENAI_MODEL="..."
+export AI_LLM_TIMEOUT_SECONDS="60"
+export AI_READ_TIMEOUT_SECONDS="75"
 docker compose up --build
 ```
 
@@ -78,10 +78,11 @@ uvicorn app.main:app --reload
 - LLM 실패: 위험률은 저장하고 `llmStatus=FAILED`, `analysisStatus=PARTIAL`
 
 실패 원인을 성공값이나 임의의 0으로 바꾸지 않는다. 세부 오류와 인증 정보는 사용자 응답에 노출하지 않는다.
+AI 오류는 Spring의 SLF4J 로그와 FastAPI의 Python 표준 로그에 요청 ID·고객번호·기준월을 포함해 기록한다.
+API 키, 전체 피처 JSON, LLM 요청·응답 원문은 오류 로그에 기록하지 않는다.
 
 ## 문서
 
 - [API 요약](docs/API_SPEC.md)
 - [DB 구현 기준](docs/DB_SPEC.md)
 - [모델 파일 배치](ai-server/models/README.md)
-

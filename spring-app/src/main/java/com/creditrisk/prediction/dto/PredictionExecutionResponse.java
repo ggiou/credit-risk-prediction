@@ -18,6 +18,8 @@ public record PredictionExecutionResponse(
         PredictionDetailResponse.Risk risk,
         List<Map<String, Object>> riskFactors,
         String explanation,
+        String recommendation,
+        Map<String, Object> llmOutput,
         PredictionDetailResponse.Llm llm,
         Instant predictedAt) {
 
@@ -35,6 +37,8 @@ public record PredictionExecutionResponse(
                 detail.risk(),
                 detail.riskFactors(),
                 detail.explanation(),
+                detail.recommendation(),
+                detail.llmOutput(),
                 detail.llm(),
                 detail.predictedAt());
     }

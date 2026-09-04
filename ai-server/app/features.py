@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from math import isnan
+from math import isfinite
 from typing import Any
 
 SENTINELS = {-99999999, -9999999, -999999, -99999, -9999}
@@ -23,9 +23,15 @@ DERIVED_FEATURES = (
 def _missing(value: Any) -> bool:
     if value is None:
         return True
-    if isinstance(value, float) and isnan(value):
-        return True
-    return isinstance(value, (int, float)) and value in SENTINELS
+    if isinstance(value, (int, float)):
+        return not isfinite(float(value)) or value in SENTINELS
+    if isinstance(value, str):
+        try:
+            numeric = float(value)
+        except ValueError:
+            return False
+        return not isfinite(numeric) or numeric in SENTINELS
+    return False
 
 
 def clean(value: Any) -> Any:

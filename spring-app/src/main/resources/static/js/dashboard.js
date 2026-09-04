@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 /** 선택 기준월의 대시보드 데이터를 표시한다. */
 async function loadDashboard(baseYm) {
     const data = await BO.request(`/api/v1/dashboard?baseYm=${baseYm}`);
+    updateHighRiskViewAllLink(data.baseYm);
     document.getElementById("targetCount").textContent = `${BO.number(data.summary.targetCustomerCount)}명`;
     document.getElementById("highRiskCount").textContent = `${BO.number(data.summary.highRiskCustomerCount)}명`;
     document.getElementById("increasedCount").textContent = `${BO.number(data.summary.riskIncreasedCustomerCount)}명`;
@@ -14,6 +15,18 @@ async function loadDashboard(baseYm) {
     renderRatioBars("riskDistribution", data.riskDistribution.map(item => ({label: item.riskGradeName, value: item.rate})));
     renderExpandedRiskBars("averageRisk", data.averageRiskByHorizon.map(item => ({label: `${item.horizon}개월 후`, value: item.riskRate})));
     document.getElementById("highRiskTable").innerHTML = data.highRiskCustomers.map(item => `<tr onclick="location.href='/customers/${BO.escape(item.customerId)}/summary'"><td>${BO.escape(item.customerId)}</td><td><span class="badge">${BO.escape(item.riskGradeName)}</span></td><td>${BO.percent(item.hazard1m)}</td><td>${BO.percent(item.hazard2m)}</td><td>${BO.percent(item.hazard3m)}</td><td>${BO.percent(item.riskChange3m)}</td><td>${BO.escape(modelFeatureLabel(item.primaryRiskFactor))}</td></tr>`).join("") || '<tr><td colspan="7">조회 결과가 없습니다.</td></tr>';
+}
+
+/** 현재 대시보드 기준월, 경고 등급, 모델 종합 위험 순서를 고객 전체보기 링크에 유지한다. */
+function updateHighRiskViewAllLink(baseYm) {
+    const link = document.getElementById("highRiskViewAll");
+    if (!link) return;
+    const params = new URLSearchParams({
+        baseYm,
+        riskGrade: "WARNING",
+        sort: "topRiskPercent,asc"
+    });
+    link.href = `${link.dataset.customerListPath}?${params}`;
 }
 
 /** 구버전 공통 스크립트가 캐시돼 있어도 대시보드 렌더링을 중단하지 않는다. */
