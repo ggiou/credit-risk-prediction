@@ -59,6 +59,11 @@
             <when test="condition.sortDirection == 'ASC'">ASC</when>
             <otherwise>DESC</otherwise>
         </choose>
+        , pr.prediction_id
+        <choose>
+            <when test="condition.sortDirection == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
         LIMIT #{condition.size} OFFSET #{condition.offset}
     </select>
 
@@ -88,6 +93,8 @@
                pr.percentile,
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
+               pr.recommendation,
+               CAST(pr.llm_output AS CHAR) AS llmOutput,
                pr.llm_status AS llmStatus,
                pr.prompt_version AS promptVersion,
                pr.predicted_at AS predictedAt
@@ -116,6 +123,8 @@
                pr.percentile,
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
+               pr.recommendation,
+               CAST(pr.llm_output AS CHAR) AS llmOutput,
                pr.llm_status AS llmStatus,
                pr.prompt_version AS promptVersion,
                pr.predicted_at AS predictedAt
@@ -160,6 +169,8 @@
                pr.percentile,
                CAST(pr.reasons AS CHAR) AS reasons,
                pr.explanation,
+               pr.recommendation,
+               CAST(pr.llm_output AS CHAR) AS llmOutput,
                pr.llm_status AS llmStatus,
                pr.prompt_version AS promptVersion,
                pr.predicted_at AS predictedAt
@@ -174,12 +185,13 @@
         INSERT INTO prediction_result (
             feature_snapshot_id, model_version,
             hazard_1m, hazard_2m, hazard_3m, cumulative_risk_3m,
-            risk_grade, percentile, reasons, explanation, recommendation,
+            risk_grade, percentile, reasons, explanation, recommendation, llm_output,
             llm_status, prompt_version, predicted_at
         ) VALUES (
             #{featureSnapshotId}, #{modelVersion},
             #{hazard1m}, #{hazard2m}, #{hazard3m}, #{cumulativeRisk3m},
-            #{riskGrade}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, NULL,
+            #{riskGrade}, #{percentile}, CAST(#{reasons} AS JSON), #{explanation}, #{recommendation},
+            CAST(#{llmOutput} AS JSON),
             #{llmStatus}, #{promptVersion}, #{predictedAt}
         )
     </insert>
@@ -190,6 +202,8 @@
             percentile = #{percentile},
             reasons = CAST(#{reasons} AS JSON),
             explanation = #{explanation},
+            recommendation = #{recommendation},
+            llm_output = CAST(#{llmOutput} AS JSON),
             llm_status = #{llmStatus},
             prompt_version = #{promptVersion}
         WHERE prediction_id = #{predictionId}
