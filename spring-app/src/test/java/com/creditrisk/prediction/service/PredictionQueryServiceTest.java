@@ -31,7 +31,7 @@ class PredictionQueryServiceTest {
                 predictionMapper,
                 new ObjectMapper(),
                 "miribom-lgbm-v0.3",
-                "v3.1");
+                "v3.2");
     }
 
     @Test
@@ -54,7 +54,7 @@ class PredictionQueryServiceTest {
         row.put("recommendation", null);
         row.put("llmOutput", "{\"summary\":\"저장된 설명\",\"keyIndicators\":[],\"managementPriority\":\"ROUTINE_MONITORING\"}");
         row.put("llmStatus", "COMPLETED");
-        row.put("promptVersion", "v3.1");
+        row.put("promptVersion", "v3.2");
         row.put("predictedAt", Timestamp.from(Instant.parse("2026-09-05T00:00:00Z")));
         when(predictionMapper.findById(7L)).thenReturn(row);
 

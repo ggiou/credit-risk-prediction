@@ -31,4 +31,4 @@ ai:
 
   model:
     version: ${AI_MODEL_VERSION:miribom-lgbm-v0.3}
-    prompt-version: ${AI_PROMPT_VERSION:v3.1}
+    prompt-version: ${AI_PROMPT_VERSION:v3.2}
