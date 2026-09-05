@@ -64,6 +64,10 @@ OBSERVABLE_FEATURES = (
     "이용금액_R3M_신용",
 )
 
+OBSERVED_DISPLAY_NAMES = {
+    "청구금액_R3M": "최근 3개월 누적 청구금액",
+}
+
 
 def horizon_pattern(hazards: list[float]) -> str:
     if hazards[0] > hazards[1] > hazards[2]:
@@ -100,8 +104,14 @@ def _format_hazard_percent(value: float) -> str:
     return f"{percent:.{digits}f}".rstrip("0").rstrip(".") + "%"
 
 
-def _format_top_risk(value: float) -> str:
-    return f"{value:.4f}".rstrip("0").rstrip(".")
+def _display_top_risk(value: float) -> float:
+    """화면과 반사실 문장에서 사용하는 고위험 순위를 소수점 한 자리로 맞춘다."""
+
+    return round(value, 1)
+
+
+def _format_display_top_risk(value: float) -> str:
+    return f"{_display_top_risk(value):.1f}"
 
 
 def _format_number(value: float) -> str:
@@ -155,25 +165,21 @@ def _llm_reason(reason: dict[str, Any]) -> dict[str, Any]:
     difference = _number(reason.get("topRiskPercentDifference"))
     if current_top is not None and counterfactual_top is not None and difference is not None:
         feature_name = str(reason.get("displayName") or reason.get("featureKey"))
-        if difference == 0:
-            risk_phrase = "위험 상위 순위는 동일하게 표시됩니다"
-        else:
-            risk_phrase = (
-                "현재 상태가 비교 상태보다 더 위험한 순위입니다"
-                if reason.get("counterfactualRiskDirection") == "CURRENT_MORE_RISKY"
-                else "현재 상태가 비교 상태보다 덜 위험한 순위입니다"
+        display_current = _display_top_risk(current_top)
+        display_counterfactual = _display_top_risk(counterfactual_top)
+        if display_current == display_counterfactual:
+            prepared["counterfactualComparisonStatement"] = (
+                f"{feature_name}을 전월값으로 대체한 재채점에서도 표시상 고위험 순위는 "
+                f"{_format_display_top_risk(current_top)}%로 동일했습니다."
             )
-        grade_phrase = (
-            f"등급은 {GRADE_NAMES.get(str(reason.get('currentGrade')), reason.get('currentGrade'))}에서 "
-            f"{reason.get('counterfactualGrade')}로 달라집니다"
-            if reason.get("counterfactualGradeChanged")
-            else f"등급은 {reason.get('counterfactualGrade')} 상태로 유지됩니다"
-        )
-        prepared["counterfactualComparisonStatement"] = (
-            f"{feature_name}을 전월값으로 되돌린 재채점의 위험 상위 비율은 "
-            f"{_format_top_risk(counterfactual_top)}%로 현재 {_format_top_risk(current_top)}%와 "
-            f"{_format_top_risk(difference)}%p 차이이며, {risk_phrase}. {grade_phrase}."
-        )
+        else:
+            display_difference = abs(display_current - display_counterfactual)
+            prepared["counterfactualComparisonStatement"] = (
+                f"{feature_name}을 전월값으로 대체한 재채점에서는 고위험 순위가 "
+                f"현재 {_format_display_top_risk(current_top)}%에서 "
+                f"{_format_display_top_risk(counterfactual_top)}%로 "
+                f"{display_difference:.1f}%p 이동했습니다."
+            )
     return prepared
 
 
@@ -183,6 +189,10 @@ def _topic(subject: str) -> str:
     last = subject[-1]
     has_batchim = "가" <= last <= "힣" and (ord(last) - ord("가")) % 28 != 0
     return f"{subject}{'은' if has_batchim else '는'}"
+
+
+def _observed_display_name(feature_key: str) -> str:
+    return OBSERVED_DISPLAY_NAMES.get(feature_key, DISPLAY_NAMES.get(feature_key, feature_key))
 
 
 def build_observed_changes(
@@ -204,9 +214,9 @@ def build_observed_changes(
         aggregate_rate = _percent_change(current.get(aggregate_key), previous.get(aggregate_key))
         if current_rate is not None and aggregate_rate is not None and current_rate * aggregate_rate < 0:
             statement = (
-                f"{_topic(DISPLAY_NAMES[current_key])} 전월보다 {_format_percent(current_rate)}% "
+                f"{_topic(_observed_display_name(current_key))} 전월보다 {_format_percent(current_rate)}% "
                 f"{'증가' if current_rate > 0 else '감소'}했지만 "
-                f"{_topic(DISPLAY_NAMES[aggregate_key])} {_format_percent(aggregate_rate)}% "
+                f"{_topic(_observed_display_name(aggregate_key))} {_format_percent(aggregate_rate)}% "
                 f"{'증가' if aggregate_rate > 0 else '감소'}했습니다."
             )
             signals.append({
@@ -240,10 +250,10 @@ def build_observed_changes(
             continue
         rate = _percent_change(current_value, previous_value)
         if rate is None:
-            statement = f"{DISPLAY_NAMES.get(feature_key, feature_key)} 값이 전월과 달라졌습니다."
+            statement = f"{_observed_display_name(feature_key)} 값이 전월과 달라졌습니다."
         else:
             statement = (
-                f"{_topic(DISPLAY_NAMES.get(feature_key, feature_key))} 전월보다 "
+                f"{_topic(_observed_display_name(feature_key))} 전월보다 "
                 f"{_format_percent(rate)}% {'증가' if rate > 0 else '감소'}했습니다."
             )
         signals.append({
@@ -298,15 +308,25 @@ def _indicator_candidates(
             if reason_features.intersection(signal.get("featureKeys", []))
         ]
         linked_signals.update(str(signal["signalId"]) for signal in related)
-        facts = [
-            str(reason.get(statement_key, "")).strip()
-            for reason in pattern_reasons
-            for statement_key in ("valueChangeStatement", "counterfactualComparisonStatement")
-        ]
-        facts.extend(
+        observed_facts = list(dict.fromkeys(
             str(signal["statement"]).strip() for signal in related
-            if len(signal.get("featureKeys", [])) > 1
+            if str(signal.get("statement", "")).strip()
+        ))
+        observed_feature_keys = {
+            key for signal in related for key in signal.get("featureKeys", [])
+        }
+        observed_facts.extend(
+            str(reason["valueChangeStatement"]).strip()
+            for reason in pattern_reasons
+            if reason.get("valueChangeStatement")
+            and reason.get("featureKey") not in observed_feature_keys
         )
+        comparison_facts = [
+            str(reason["counterfactualComparisonStatement"]).strip()
+            for reason in pattern_reasons
+            if reason.get("counterfactualComparisonStatement")
+        ]
+        facts = [*observed_facts, *comparison_facts]
         facts = list(dict.fromkeys(fact for fact in facts if fact))
         feature_keys = list(dict.fromkeys(str(reason["featureKey"]) for reason in pattern_reasons))
         for signal in related:

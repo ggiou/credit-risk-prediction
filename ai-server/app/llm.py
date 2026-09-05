@@ -14,6 +14,7 @@ from .explanation_context import PATTERN_REVIEW_CHECKS
 
 
 LOGGER = logging.getLogger("miribom.ai.llm")
+PROMPT_CACHE_KEY_PREFIX = "miribom-risk-explanation"
 
 
 SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드에서 여신관리 담당자의 검토를 돕는 분석 설명기다.
@@ -22,10 +23,11 @@ SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드
 
 [모델 출력의 의미]
 - monthlyHazards는 기준월 이후 1개월째, 2개월째, 3개월째의 월별 연체 위험률이다.
-- 연체 확률 퍼센트로 언급할 수 있는 값은 monthlyHazards뿐이다. topRiskPercent는 확률이 아니라 비교군 내 위험 상위 비율로만 표현한다.
-- topRiskPercent는 비교군에서 위험 상위 몇 퍼센트인지를 뜻한다. 값이 작을수록 더 위험하다.
+- 연체 확률 퍼센트로 언급할 수 있는 값은 monthlyHazards뿐이다. topRiskPercent는 확률이 아니라 비교군 내 고위험 순위 기준 위치로만 표현한다.
+- topRiskPercent는 고위험 순위 기준 위치를 뜻하며 값이 작을수록 비교군 내 위험 우선순위가 높다. '위험 상위 N%'라고 쓰지 않고 '고위험 순위 기준 N% 지점'이라고 쓴다.
 - grade는 모델이 3개월 종합 분류 기준으로 확정한 결과다. 이를 변경하거나 재평가하지 않는다.
 - modelDirection은 현재 값이 해당 고객의 모델 점수에 기여한 방향이다. 전월 대비 값이 증가하거나 감소한 방향과 다르다.
+- modelDirection은 c3 원점수의 현재 결과와 반사실 재채점 결과 차이로 백엔드가 확정한 방향이다. 표시상 고위험 순위가 같아도 modelDirection을 변경하거나 중립으로 해석하지 않는다.
 - reasonMethod가 LOCAL_SHAP이면 고객별 모델 기여 근거다.
 - reasonMethod가 PREVIOUS_VALUE_COUNTERFACTUAL이면 현재값을 전월값으로 되돌려 재채점했을 때의 모델 변화다. 이를 SHAP이나 확정 원인이라고 부르지 않는다.
 - observedChanges는 백엔드가 계산한 사실이다. 수치를 다시 계산하지 않는다.
@@ -34,7 +36,7 @@ SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드
 - managementPriority와 generationMode는 백엔드가 등급과 호출 방식에 따라 결정한 값이다. 그대로 반환한다. summary에는 managementPriorityDisplay를 그대로 사용한다.
 
 [필드별 역할]
-1. summary는 최종 등급, 위험 상위 비율, 관리 우선순위를 1~2문장으로 요약한다. horizonEmphasis가 PEAK일 때만 위험이 가장 큰 월을 언급하고, LOW_STABLE이면 세 기간 모두 위험값이 낮게 유지된다고 설명한다.
+1. summary는 최종 등급, 고위험 순위 기준 위치, 관리 우선순위를 1~2문장으로 요약한다. 순위는 '고위험 순위 기준 N% 지점이며, 수치가 작을수록 비교군 내 위험 우선순위가 높습니다.'라고 설명한다. horizonEmphasis가 PEAK일 때만 위험이 가장 큰 월을 언급하고, LOW_STABLE이면 세 기간 모두 위험값이 낮게 유지된다고 설명한다.
 2. modelInterpretation은 LightGBM이 포착한 상위 근거와 modelDirection을 2~3문장으로 종합한다. 반사실 순위의 구체적인 숫자와 문장은 keyIndicators.fact에서만 보여주고, modelInterpretation에 counterfactualComparisonStatement를 그대로 복사하지 않는다.
 3. keyIndicators는 indicatorCandidates에서 서로 다른 핵심 후보를 원칙적으로 2~4개 선택한다. 유효 후보가 하나뿐이면 1개만 선택한다. title, fact, modelRelation과 모든 참조 배열은 후보와 똑같이 복사하고 interpretation만 한 문장으로 작성한다.
 4. changeContext는 keyIndicators의 구체적인 숫자를 반복하지 않고, 지표들을 함께 봤을 때의 기간별·방향별 흐름을 1~2문장으로 종합한다. 유의미한 종합 맥락이 없으면 빈 문자열로 둔다.
@@ -52,6 +54,11 @@ SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드
 - 원시 feature key보다 displayName을 사용한다.
 - B2B 관리자 화면에 표시되는 설명이므로 모든 문장은 자연스러운 존댓말인 '~입니다.', '~합니다.', '~되었습니다.' 형태로 작성한다. '~임', '~함', '~됨', '~나타남' 같은 명사형 종결은 사용하지 않는다.
 - modelInterpretation에서는 상위 지표들의 위험 증가·감소 방향을 한 문단에서 종합하고, 모델이 상대적으로 우선 포착한 패턴을 설명한다. 등급과 월별 위험률을 다시 나열해 이 내용을 대체하지 않는다.
+- keyIndicators.fact는 관찰된 수치 변화와 반사실 재채점의 순위 이동만 담은 객관적 사실이다. fact에 없는 위험 방향 결론, 등급 유지 여부, 담당자 행동 또는 금융 인과관계를 fact처럼 반복하지 않는다.
+- keyIndicators.interpretation에서는 관찰된 증감과 modelDirection을 구분한다. 두 방향이 어긋나면 '관찰된 변화'와 '모델의 국소 재채점 반응'을 별도 문장으로 설명하고, 다른 피처와의 조합에서 나타난 모델 반응으로 제한하여 해석한다.
+- LightGBM의 모델 방향과 실제 기간별 관찰 흐름은 서로 다른 문장으로 설명한다. 모델 방향이 위험 감소이면서 당월과 최근 3개월의 관찰 흐름은 혼재될 수 있으므로, 기간별 지표가 엇갈리면 관찰 흐름을 '혼재'라고 명시한다.
+- counterfactualComparisonStatement에 '표시상 고위험 순위는 N%로 동일했습니다.'가 있으면 0%p 이동이라고 바꾸지 않는다. 이때 interpretation은 표시상 순위 차이가 없다는 사실과 내부 modelDirection을 구분한다.
+- 관찰 방향과 모델 방향이 일치하더라도 인과관계나 위험 완화를 확정하지 않는다. counterfactualGradeChanged가 false이면 해당 근거가 등급을 변경할 정도의 차이는 아니었다고 설명할 수 있다.
 - 반사실 재채점 방식, SHAP이 아니라는 점, 실제 원인을 확정하지 않는다는 안내는 화면의 모델 근거 영역에 고정 표시된다. summary, modelInterpretation, changeContext에서 해당 면책 문구를 생성하거나 반복하지 않는다.
 - 구체적인 금액, 비율, 증감률은 keyIndicators.fact와 counterfactualComparisonStatement에 제공된 값만 사용한다. 수치를 새로 계산하지 않는다.
 - 같은 사실이나 문장을 summary, modelInterpretation, keyIndicators, changeContext에서 반복하지 않는다.
@@ -65,6 +72,7 @@ SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드
 - 모델 기여 방향과 금융 상식이 다르더라도 인과관계를 새로 만들어 모델을 정당화하지 않는다. 합성데이터 모델에는 비단조 관계가 있을 수 있다.
 - 리볼빙 전환, 대출, 한도 증액과 같은 상품을 권유하지 않는다.
 - contribution 로그오즈 값을 화면용 문장에 쓰지 않는다.
+- '위험 상위 N%'처럼 순위가 확률이나 위험 고객 비율로 오해될 수 있는 표현을 사용하지 않는다.
 - c3 또는 cumulativeRisk3m을 확률 퍼센트로 출력하지 않는다.
 - horizon 자체를 고객 위험 사유로 사용하지 않는다.
 - JSON 스키마 밖의 텍스트를 출력하지 않는다.
@@ -398,6 +406,8 @@ class RiskExplanationClient:
             raise ValueError("LLM output repeats non-actionable uncertainty phrases")
         if combined.count("위험 점수를 높이는 방향으로 반영") > 1:
             raise ValueError("LLM output repeats model-direction boilerplate")
+        if re.search(r"위험\s*(?:완화|감소|증가).{0,8}(?:확인|확정)", combined):
+            raise ValueError("local model response must not be presented as a confirmed risk effect")
         if re.search(r"(?:c3|cumulative\s*risk|cumulativeRisk3m|누적\s*위험).{0,20}%", combined, re.I):
             raise ValueError("c3/cumulative risk must not be exposed as a percentage")
         if re.search(r"horizon.{0,20}(?:원인|근거|요인)", combined, re.I):
@@ -442,8 +452,11 @@ class RiskExplanationClient:
             raise ValueError("LLM output contains duplicate sentences")
 
         peak = input_payload["prediction"]["peakHorizonMonth"]
-        if grade not in payload["summary"] or "위험 상위" not in payload["summary"]:
+        expected_rank = f"고위험 순위 기준 {input_payload['prediction']['topRiskPercent']:g}% 지점"
+        if grade not in payload["summary"] or expected_rank not in payload["summary"]:
             raise ValueError("summary must include grade and top-risk percentage")
+        if "위험 상위" in combined:
+            raise ValueError("top-risk position must not be phrased as a risk probability")
         priority_pattern = MANAGEMENT_PRIORITY_PATTERNS[input_payload["managementPriority"]]
         if not re.search(priority_pattern, payload["summary"]):
             raise ValueError("summary must include the backend-selected management priority")
@@ -507,11 +520,14 @@ class RiskExplanationClient:
 
         for attempt in range(2):
             try:
+                prompt_version = str(input_payload["modelContext"]["promptVersion"])
                 response = self.client.responses.create(
                     model=self.model,
                     instructions=SYSTEM_RULES,
                     input=json.dumps(call_input, ensure_ascii=False, allow_nan=False),
                     text={"format": {"type": "json_schema", "name": "credit_risk_explanation_v3", "strict": True, "schema": schema}},
+                    prompt_cache_key=f"{PROMPT_CACHE_KEY_PREFIX}:{prompt_version}",
+                    prompt_cache_options={"mode": "explicit", "ttl": "30m"},
                 )
             except Exception as exc:  # 네트워크 오류를 검증 오류로 오인해 같은 요청을 반복하지 않는다.
                 error_name = type(exc).__name__

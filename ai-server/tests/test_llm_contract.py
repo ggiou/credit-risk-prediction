@@ -5,14 +5,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.llm import RiskExplanationClient
+from app.llm import RiskExplanationClient, SYSTEM_RULES
 
 
 def llm_input():
     return {
         "modelContext": {
             "modelVersion": "miribom-lgbm-v0.3",
-            "promptVersion": "v3.1",
+            "promptVersion": "v3.2",
             "predictionSource": "LIGHTGBM_JSON",
             "dataType": "PUBLIC_SYNTHETIC_DEMO",
             "target": "기준월 이후 1·2·3개월째 연체 발생 위험",
@@ -37,8 +37,8 @@ def llm_input():
             "counterfactualTopRiskPercent": 4.7, "topRiskPercentDifference": 4.37,
             "counterfactualRiskDirection": "CURRENT_MORE_RISKY", "counterfactualGradeChanged": True,
             "counterfactualComparisonStatement": (
-                "이용 가능 카드 비율을 전월값으로 되돌린 재채점의 위험 상위 비율은 "
-                "4.7%로 현재 0.33%와 4.37%p 차이입니다."
+                "이용 가능 카드 비율을 전월값으로 대체한 재채점에서는 고위험 순위가 "
+                "현재 0.3%에서 4.7%로 4.4%p 이동했습니다."
             ),
             "evidenceFeatureKeys": ["이용가능카드수_신용", "f_카드가용비율"],
             "patternCode": "CREDIT_AVAILABILITY",
@@ -51,8 +51,8 @@ def llm_input():
             {
                 "indicatorId": "K1", "title": "카드 이용 가능 상태",
                 "fact": (
-                    "이용 가능 카드 비율을 전월값으로 되돌린 재채점의 위험 상위 비율은 "
-                    "4.7%로 현재 0.33%와 4.37%p 차이입니다."
+                    "이용 가능 카드 비율을 전월값으로 대체한 재채점에서는 고위험 순위가 "
+                    "현재 0.3%에서 4.7%로 4.4%p 이동했습니다."
                 ),
                 "modelRelation": "RISK_INCREASE", "reasonIds": ["R1"], "signalIds": [],
                 "featureKeys": ["f_카드가용비율", "이용가능카드수_신용"],
@@ -79,7 +79,10 @@ def valid_output():
         indicator["interpretation"] = interpretation
         indicators.append(indicator)
     return {
-        "summary": "모델 등급은 주의이며 위험 상위 0.33%입니다. 1개월 구간의 우선 검토가 필요합니다.",
+        "summary": (
+            "모델 등급은 주의이며 고위험 순위 기준 0.33% 지점으로, 수치가 작을수록 "
+            "비교군 내 위험 우선순위가 높습니다. 1개월 구간의 우선 검토가 필요합니다."
+        ),
         "modelInterpretation": "모델은 카드 이용 가능 상태 패턴을 위험 증가 방향의 우선 근거로 포착했습니다.",
         "keyIndicators": indicators,
         "changeContext": "카드 이용 가능 상태와 기존 한도 조정 이력을 함께 점검할 필요가 있습니다.",
@@ -136,7 +139,10 @@ def test_normal_low_stable_output_allows_no_review_point():
     input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
     input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
     output = valid_output()
-    output["summary"] = "모델 등급은 정상이며 위험 상위 98.7%입니다. 세 기간의 위험값은 전반적으로 낮게 유지되어 정기 모니터링 대상입니다."
+    output["summary"] = (
+        "모델 등급은 정상이며 고위험 순위 기준 98.7% 지점으로, 수치가 작을수록 비교군 내 "
+        "위험 우선순위가 높습니다. 세 기간의 위험값은 전반적으로 낮게 유지되어 정기 모니터링 대상입니다."
+    )
     output["modelInterpretation"] = "모델은 카드 이용 가능 상태를 위험 완화 방향의 비교 근거로 포착했습니다."
     output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
     output["reviewPoints"] = []
@@ -155,7 +161,10 @@ def test_normal_priority_accepts_natural_routine_monitoring_synonym():
     input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
     input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
     output = valid_output()
-    output["summary"] = "모델 등급은 정상이며 위험 상위 98.7%입니다. 세 기간의 위험값이 낮게 유지되어 관리 우선순위는 일상 모니터링입니다."
+    output["summary"] = (
+        "모델 등급은 정상이며 고위험 순위 기준 98.7% 지점으로, 수치가 작을수록 비교군 내 "
+        "위험 우선순위가 높습니다. 세 기간의 위험값이 낮게 유지되어 관리 우선순위는 일상 모니터링입니다."
+    )
     output["modelInterpretation"] = "모델은 카드 이용 가능 상태를 위험 완화 방향의 비교 근거로 포착했습니다."
     output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
     output["reviewPoints"] = []
@@ -218,6 +227,8 @@ def test_validation_rejects_noun_form_sentence_endings():
         (lambda output: output.update(changeContext="관찰되지 않은 비율은 77.77%입니다."), "number not present"),
         (lambda output: output.update(changeContext="전월보다 위험률이 1% 상승했습니다."), "model risk comparison"),
         (lambda output: output.update(changeContext="시간이 지날수록 위험이 커집니다."), "time-horizon risk"),
+        (lambda output: output.update(changeContext="위험 완화가 확인되었습니다."), "confirmed risk effect"),
+        (lambda output: output.update(changeContext="위험 상위 0.33%입니다."), "risk probability"),
     ],
 )
 def test_validation_rejects_unsupported_output(mutate, message):
@@ -275,3 +286,27 @@ def test_validation_failure_gets_one_correction_retry():
     assert result.status == "COMPLETED"
     assert len(responses.inputs) == 2
     assert "unknown reason ID" in responses.inputs[1]["correction"]
+
+
+def test_openai_request_uses_versioned_explicit_prompt_cache():
+    class CapturingResponses:
+        def __init__(self):
+            self.request = None
+
+        def create(self, **kwargs):
+            self.request = kwargs
+            return SimpleNamespace(output_text=json.dumps(valid_output(), ensure_ascii=False))
+
+    responses = CapturingResponses()
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.model = "test-model"
+    client.timeout_seconds = 60
+
+    result = client.generate(input_payload=llm_input())
+
+    assert result.status == "COMPLETED"
+    assert responses.request["prompt_cache_key"] == "miribom-risk-explanation:v3.2"
+    assert responses.request["prompt_cache_options"] == {"mode": "explicit", "ttl": "30m"}
+    assert "모델 방향이 위험 감소이면서" in SYSTEM_RULES
+    assert "표시상 고위험 순위" in SYSTEM_RULES

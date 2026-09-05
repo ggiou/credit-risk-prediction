@@ -51,14 +51,14 @@ class PredictionCommandServiceTest {
                 aiPredictionClient,
                 new ObjectMapper(),
                 MODEL_VERSION,
-                "v3.1");
+                "v3.2");
         when(predictionMapper.findFeatureSnapshots(CUSTOMER_ID, BASE_YM, "201811"))
                 .thenReturn(List.of(currentSnapshot()));
     }
 
     @Test
     void reusesResultWhenCompletedExplanationExists() {
-        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명", "v3.1");
+        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명", "v3.2");
         PredictionDetailResponse detail = detail("COMPLETED", "완료된 설명");
         when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
         when(predictionQueryService.toDetail(reused)).thenReturn(detail);
@@ -173,7 +173,7 @@ class PredictionCommandServiceTest {
                         "text", "다음 결제 예정 금액과 최근 납부 이력 확인",
                         "reasonIds", List.of("R1"),
                         "signalIds", List.of("S1")))));
-        response.put("llm", Map.of("status", "COMPLETED", "promptVersion", "v3.1"));
+        response.put("llm", Map.of("status", "COMPLETED", "promptVersion", "v3.2"));
         response.put("predictedAt", "2026-09-01T00:00:00Z");
         return response;
     }
@@ -199,7 +199,7 @@ class PredictionCommandServiceTest {
                 explanation,
                 null,
                 null,
-                new PredictionDetailResponse.Llm(llmStatus, "v3.1", "v3.1", false),
+                new PredictionDetailResponse.Llm(llmStatus, "v3.2", "v3.2", false),
                 Instant.parse("2026-09-01T00:00:00Z"));
     }
 }
