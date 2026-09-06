@@ -13,8 +13,28 @@ async function loadDashboard(baseYm) {
     document.getElementById("increasedCount").textContent = `${BO.number(data.summary.riskIncreasedCustomerCount)}명`;
     document.getElementById("completionRate").textContent = BO.percent(data.summary.predictionCompletionRate);
     renderRatioBars("riskDistribution", data.riskDistribution.map(item => ({label: item.riskGradeName, value: item.rate})));
+    renderRiskDistributionBasis(data.summary);
     renderExpandedRiskBars("averageRisk", data.averageRiskByHorizon.map(item => ({label: `${item.horizon}개월 후`, value: item.riskRate})));
     document.getElementById("highRiskTable").innerHTML = data.highRiskCustomers.map(item => `<tr onclick="location.href='/customers/${BO.escape(item.customerId)}/summary'"><td>${BO.escape(item.customerId)}</td><td><span class="badge">${BO.escape(item.riskGradeName)}</span></td><td>${BO.percent(item.hazard1m)}</td><td>${BO.percent(item.hazard2m)}</td><td>${BO.percent(item.hazard3m)}</td><td>${BO.percent(item.riskChange3m)}</td><td>${BO.escape(modelFeatureLabel(item.primaryRiskFactor))}</td></tr>`).join("") || '<tr><td colspan="7">조회 결과가 없습니다.</td></tr>';
+}
+
+/** 등급 분포가 전체 고객이 아니라 분석 완료 고객 기준임을 명시한다.
+ *  분모가 completedCount라 완료율이 낮으면 특정 등급 비율이 크게 부풀려 보인다. */
+const RISK_DISTRIBUTION_REPRESENTATIVE_RATE = 0.5;
+
+function renderRiskDistributionBasis(summary) {
+    const basis = document.getElementById("riskDistributionBasis");
+    const warning = document.getElementById("riskDistributionWarning");
+    if (!basis || !warning) return;
+    const target = Number(summary.targetCustomerCount) || 0;
+    const completed = Number(summary.predictionCompletedCount) || 0;
+    basis.textContent = `전체 ${BO.number(target)}명 중 분석 완료 ${BO.number(completed)}명 기준 (완료율 ${BO.percent(summary.predictionCompletionRate)})`;
+    const rate = Number(summary.predictionCompletionRate) || 0;
+    const show = completed > 0 && rate < RISK_DISTRIBUTION_REPRESENTATIVE_RATE;
+    warning.textContent = show
+        ? `분석 완료율이 낮아 이 분포는 전체 고객을 대표하지 않습니다. 남은 고객을 분석하면 비율이 달라질 수 있습니다.`
+        : "";
+    warning.hidden = !show;
 }
 
 /** 현재 대시보드 기준월, 경고 등급, 모델 종합 위험 순서를 고객 전체보기 링크에 유지한다. */
