@@ -14,7 +14,6 @@ from .explanation_context import PATTERN_REVIEW_CHECKS
 
 
 LOGGER = logging.getLogger("miribom.ai.llm")
-PROMPT_CACHE_KEY_PREFIX = "miribom-risk-explanation"
 
 
 SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드에서 여신관리 담당자의 검토를 돕는 분석 설명기다.
@@ -183,11 +182,134 @@ class LlmResult:
 
 
 class RiskExplanationClient:
-    def __init__(self, *, api_key: str, model: str, timeout_seconds: float):
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        prompt_version: str,
+        prompt_cache_enabled: bool,
+        prompt_cache_mode: str,
+        prompt_cache_ttl: str,
+        prompt_cache_key_prefix: str,
+        timeout_seconds: float,
+    ):
         # 검증 오류만 애플리케이션에서 한 번 교정 재시도하므로 SDK 네트워크 재시도는 중복 수행하지 않는다.
         self.client = OpenAI(api_key=api_key, timeout=timeout_seconds, max_retries=0)
         self.model = model
+        self.prompt_version = prompt_version
+        self.prompt_cache_enabled = prompt_cache_enabled
+        self.prompt_cache_mode = prompt_cache_mode
+        self.prompt_cache_ttl = prompt_cache_ttl
+        self.prompt_cache_key_prefix = prompt_cache_key_prefix
         self.timeout_seconds = timeout_seconds
+
+    @property
+    def prompt_cache_key(self) -> str:
+        prefix = getattr(self, "prompt_cache_key_prefix", "miribom-risk-explanation")
+        version = getattr(self, "prompt_version", "unknown")
+        return f"{prefix}:{version}"
+
+    def _build_request_options(
+        self,
+        *,
+        call_input: dict[str, Any],
+        schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        cache_enabled = getattr(self, "prompt_cache_enabled", True)
+        cache_mode = getattr(self, "prompt_cache_mode", "explicit")
+        cache_ttl = getattr(self, "prompt_cache_ttl", "30m")
+        prompt_block: dict[str, Any] = {
+            "type": "input_text",
+            "text": SYSTEM_RULES,
+        }
+        if cache_enabled:
+            prompt_block["prompt_cache_breakpoint"] = {"mode": cache_mode}
+
+        serialized_model_context = json.dumps(
+            call_input,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+        request_options: dict[str, Any] = {
+            "model": self.model,
+            "input": [
+                {
+                    "role": "developer",
+                    "content": [prompt_block],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": serialized_model_context,
+                        }
+                    ],
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "credit_risk_explanation_v3",
+                    "strict": True,
+                    "schema": schema,
+                }
+            },
+        }
+        if cache_enabled:
+            request_options["prompt_cache_key"] = self.prompt_cache_key
+            request_options["prompt_cache_options"] = {
+                "mode": cache_mode,
+                "ttl": cache_ttl,
+            }
+        return request_options
+
+    @staticmethod
+    def _usage_value(container: Any, name: str) -> int:
+        if container is None:
+            return 0
+        value = container.get(name) if isinstance(container, dict) else getattr(container, name, None)
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _log_usage(self, response: Any) -> None:
+        cache_enabled = getattr(self, "prompt_cache_enabled", True)
+        prompt_version = getattr(self, "prompt_version", "unknown")
+        cache_mode_value = getattr(self, "prompt_cache_mode", "explicit")
+        cache_ttl_value = getattr(self, "prompt_cache_ttl", "30m")
+        usage = getattr(response, "usage", None)
+        input_details = (
+            usage.get("input_tokens_details")
+            if isinstance(usage, dict)
+            else getattr(usage, "input_tokens_details", None)
+        ) if usage is not None else None
+        input_tokens = self._usage_value(usage, "input_tokens")
+        cached_tokens = self._usage_value(input_details, "cached_tokens")
+        cache_write_tokens = self._usage_value(input_details, "cache_write_tokens")
+        output_tokens = self._usage_value(usage, "output_tokens")
+        total_tokens = self._usage_value(usage, "total_tokens")
+        cache_key = self.prompt_cache_key if cache_enabled else "-"
+        cache_mode = cache_mode_value if cache_enabled else "disabled"
+        cache_ttl = cache_ttl_value if cache_enabled else "-"
+        LOGGER.info(
+            "LLM usage model=%s promptVersion=%s cacheKey=%s cacheMode=%s cacheTtl=%s "
+            "input=%s cached=%s cacheWrite=%s output=%s total=%s cacheHit=%s",
+            self.model,
+            prompt_version,
+            cache_key,
+            cache_mode,
+            cache_ttl,
+            input_tokens,
+            cached_tokens,
+            cache_write_tokens,
+            output_tokens,
+            total_tokens,
+            str(cached_tokens > 0).lower(),
+        )
 
     @staticmethod
     def _split_sentences(value: str) -> list[str]:
@@ -669,15 +791,9 @@ class RiskExplanationClient:
 
         for attempt in range(2):
             try:
-                prompt_version = str(input_payload["modelContext"]["promptVersion"])
-                response = self.client.responses.create(
-                    model=self.model,
-                    instructions=SYSTEM_RULES,
-                    input=json.dumps(call_input, ensure_ascii=False, allow_nan=False),
-                    text={"format": {"type": "json_schema", "name": "credit_risk_explanation_v3", "strict": True, "schema": schema}},
-                    prompt_cache_key=f"{PROMPT_CACHE_KEY_PREFIX}:{prompt_version}",
-                    prompt_cache_options={"mode": "explicit", "ttl": "30m"},
-                )
+                request_options = self._build_request_options(call_input=call_input, schema=schema)
+                response = self.client.responses.create(**request_options)
+                self._log_usage(response)
             except Exception as exc:  # 네트워크 오류를 검증 오류로 오인해 같은 요청을 반복하지 않는다.
                 error_name = type(exc).__name__
                 LOGGER.exception(

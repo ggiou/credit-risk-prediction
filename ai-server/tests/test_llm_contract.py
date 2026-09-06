@@ -8,6 +8,10 @@ import pytest
 from app.llm import RiskExplanationClient, SYSTEM_RULES
 
 
+def dynamic_request_payload(request):
+    return json.loads(request["input"][1]["content"][0]["text"])
+
+
 def llm_input():
     return {
         "modelContext": {
@@ -350,7 +354,7 @@ def test_validation_failure_gets_one_correction_retry():
             self.inputs = []
 
         def create(self, **kwargs):
-            self.inputs.append(json.loads(kwargs["input"]))
+            self.inputs.append(dynamic_request_payload(kwargs))
             payload = invalid if len(self.inputs) == 1 else valid_output()
             return SimpleNamespace(output_text=json.dumps(payload, ensure_ascii=False))
 
@@ -436,7 +440,7 @@ def test_decrease_only_retry_receives_actionable_korean_correction():
             self.inputs = []
 
         def create(self, **kwargs):
-            self.inputs.append(json.loads(kwargs["input"]))
+            self.inputs.append(dynamic_request_payload(kwargs))
             payload = invalid if len(self.inputs) == 1 else corrected
             return SimpleNamespace(output_text=json.dumps(payload, ensure_ascii=False))
 
@@ -466,13 +470,33 @@ def test_openai_request_uses_versioned_explicit_prompt_cache():
     client = object.__new__(RiskExplanationClient)
     client.client = SimpleNamespace(responses=responses)
     client.model = "test-model"
+    client.prompt_version = "v3.6"
+    client.prompt_cache_enabled = True
+    client.prompt_cache_mode = "explicit"
+    client.prompt_cache_ttl = "30m"
+    client.prompt_cache_key_prefix = "miribom-risk-explanation"
     client.timeout_seconds = 60
 
-    result = client.generate(input_payload=llm_input())
+    input_payload = llm_input()
+    input_payload["customerId"] = "SYN_123"
+    input_payload["requestId"] = "request-456"
+    result = client.generate(input_payload=input_payload)
 
     assert result.status == "COMPLETED"
-    assert responses.request["prompt_cache_key"] == "miribom-risk-explanation:v3.3"
+    assert responses.request["prompt_cache_key"] == "miribom-risk-explanation:v3.6"
+    assert "SYN_123" not in responses.request["prompt_cache_key"]
+    assert "request-456" not in responses.request["prompt_cache_key"]
     assert responses.request["prompt_cache_options"] == {"mode": "explicit", "ttl": "30m"}
+    assert "instructions" not in responses.request
+    developer_message, user_message = responses.request["input"]
+    assert developer_message["role"] == "developer"
+    assert developer_message["content"] == [{
+        "type": "input_text",
+        "text": SYSTEM_RULES,
+        "prompt_cache_breakpoint": {"mode": "explicit"},
+    }]
+    assert user_message["role"] == "user"
+    assert json.loads(user_message["content"][0]["text"]) == input_payload
     review_schema = responses.request["text"]["format"]["schema"]["properties"]["reviewPoints"]
     assert review_schema["minItems"] == 1
     assert review_schema["maxItems"] == 2
@@ -481,3 +505,47 @@ def test_openai_request_uses_versioned_explicit_prompt_cache():
     assert "정상 등급: 0~1개" in SYSTEM_RULES
     assert "관심·주의·경고 등급: 1~2개" in SYSTEM_RULES
     assert "내부 필드명을 화면 문장에 직접 쓰지 않는다" in SYSTEM_RULES
+
+
+def test_openai_request_omits_all_prompt_cache_fields_when_disabled():
+    client = object.__new__(RiskExplanationClient)
+    client.model = "test-model"
+    client.prompt_version = "v3.6"
+    client.prompt_cache_enabled = False
+    client.prompt_cache_mode = "explicit"
+    client.prompt_cache_ttl = "30m"
+    client.prompt_cache_key_prefix = "miribom-risk-explanation"
+
+    schema = {"type": "object"}
+    request = client._build_request_options(call_input=llm_input(), schema=schema)
+
+    assert "prompt_cache_key" not in request
+    assert "prompt_cache_options" not in request
+    assert "prompt_cache_breakpoint" not in request["input"][0]["content"][0]
+    assert request["text"]["format"]["schema"] is schema
+    assert request["input"][0]["content"][0]["text"] == SYSTEM_RULES
+    assert json.loads(request["input"][1]["content"][0]["text"]) == llm_input()
+
+
+def test_usage_logging_handles_cache_details_and_missing_usage(caplog):
+    client = object.__new__(RiskExplanationClient)
+    client.model = "gpt-5.6-luna"
+    client.prompt_version = "v3.6"
+    client.prompt_cache_enabled = True
+    client.prompt_cache_mode = "explicit"
+    client.prompt_cache_ttl = "30m"
+    client.prompt_cache_key_prefix = "miribom-risk-explanation"
+    usage = SimpleNamespace(
+        input_tokens=7171,
+        input_tokens_details=SimpleNamespace(cached_tokens=2500, cache_write_tokens=0),
+        output_tokens=1886,
+        total_tokens=9057,
+    )
+
+    with caplog.at_level("INFO", logger="miribom.ai.llm"):
+        client._log_usage(SimpleNamespace(usage=usage))
+        client._log_usage(SimpleNamespace())
+
+    assert "cacheKey=miribom-risk-explanation:v3.6" in caplog.text
+    assert "input=7171 cached=2500 cacheWrite=0 output=1886 total=9057 cacheHit=true" in caplog.text
+    assert "input=0 cached=0 cacheWrite=0 output=0 total=0 cacheHit=false" in caplog.text
