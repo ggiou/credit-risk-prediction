@@ -9,6 +9,7 @@ public record PredictionHistoryItem(
         long predictionId,
         Instant predictedAt,
         String customerId,
+        String displayName,
         String baseYm,
         double hazard1m,
         double hazard2m,
