@@ -65,6 +65,9 @@ const BOBulkCustomerSearch = (() => {
         });
         modal.querySelectorAll('input[name="bulkSearchType"]').forEach(radio => {
             radio.addEventListener("change", () => {
+                textarea.placeholder = selectedType() === "customerIds"
+                    ? "고객번호를 입력해주세요"
+                    : "고객명을 입력해주세요";
                 setTimeout(() => textarea.focus(), 0);
             });
         });
