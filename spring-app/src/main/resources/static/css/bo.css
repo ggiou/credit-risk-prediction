@@ -2179,6 +2179,13 @@ body.has-modal {
 .customer-search-with-bulk input {
     width: 100%;
     padding-right: 42px;
+    text-overflow: ellipsis;
+}
+
+.customer-search-with-bulk input[readonly] {
+    background: #f8fafc;
+    color: var(--text);
+    cursor: default;
 }
 
 .bulk-search-trigger {
