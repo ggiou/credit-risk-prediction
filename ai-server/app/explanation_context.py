@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .model_bundle import DISPLAY_NAMES, LEAKAGE_FEATURES, PATTERN_FEATURES, ModelPrediction
+from .model_bundle import (
+    DISPLAY_NAMES,
+    EMBEDDED_PREVIOUS_FEATURES,
+    LEAKAGE_FEATURES,
+    PATTERN_FEATURES,
+    ModelPrediction,
+)
 
 
 GRADE_NAMES = {
@@ -84,6 +90,27 @@ def _number(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def resolve_previous_value(
+    current: dict[str, Any],
+    previous: dict[str, Any] | None,
+    feature_key: str,
+) -> Any:
+    """근거(ModelBundle.risk_factors)와 동일한 규칙으로 '전월값'을 고른다.
+
+    한 피처에 전월 기준이 두 개면 같은 달에 대해 서로 다른 변화율이 만들어지고,
+    LLM은 그중 아무 값이나 골라 쓸 수 있다. 실제로 잔액_현금서비스_B0M은
+    B1M 기준 +22.71%, 직전월 스냅샷 기준 +34.64%로 갈렸다.
+    ModelBundle이 EMBEDDED_PREVIOUS_FEATURES를 우선하므로 관찰 신호도 같은 기준을 쓴다.
+    """
+
+    embedded_key = EMBEDDED_PREVIOUS_FEATURES.get(feature_key)
+    if embedded_key is not None and embedded_key in current:
+        return current.get(embedded_key)
+    if previous is None:
+        return None
+    return previous.get(feature_key)
 
 
 def _percent_change(current: Any, previous: Any) -> float | None:
@@ -297,8 +324,12 @@ def build_observed_changes(
     for current_key, aggregate_key in (
         ("청구금액_B0", "청구금액_R3M"),
     ):
-        current_rate = _percent_change(current.get(current_key), previous.get(current_key))
-        aggregate_rate = _percent_change(current.get(aggregate_key), previous.get(aggregate_key))
+        current_rate = _percent_change(
+            current.get(current_key), resolve_previous_value(current, previous, current_key)
+        )
+        aggregate_rate = _percent_change(
+            current.get(aggregate_key), resolve_previous_value(current, previous, aggregate_key)
+        )
         if current_rate is not None and aggregate_rate is not None and current_rate * aggregate_rate < 0:
             statement = (
                 f"{_topic(_observed_display_name(current_key))} 전월보다 {_format_percent(current_rate)}% "
@@ -323,10 +354,12 @@ def build_observed_changes(
     for feature_key in OBSERVABLE_FEATURES:
         if feature_key in used or feature_key in LEAKAGE_FEATURES:
             continue
-        if feature_key not in current or feature_key not in previous:
+        if feature_key not in current:
             continue
         current_value = current.get(feature_key)
-        previous_value = previous.get(feature_key)
+        previous_value = resolve_previous_value(current, previous, feature_key)
+        if previous_value is None:
+            continue
         if current_value == previous_value:
             if feature_key == "강제한도감액횟수_R12M" and "CREDIT_AVAILABILITY" in reason_patterns:
                 signals.append({
@@ -354,6 +387,53 @@ def build_observed_changes(
     for index, signal in enumerate(signals[:6], start=1):
         signal["signalId"] = f"S{index}"
     return signals[:6]
+
+
+def build_feature_change_facts(
+    current: dict[str, Any],
+    previous: dict[str, Any] | None,
+    reasons: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """표시명 -> 확정된 변화 사실. LLM 출력의 퍼센트·방향을 결정론적으로 대조하는 기준이다.
+
+    한 표시명에 서로 다른 변화율이 오면(전월 기준이 갈린 상태) 대조 기준을 세울 수 없으므로
+    해당 항목을 CONFLICT로 표시하고 검증에서 숫자 사용 자체를 막는다.
+    """
+
+    facts: dict[str, dict[str, Any]] = {}
+
+    def register(display_name: str, rate_percent: float | None) -> None:
+        if not display_name or rate_percent is None:
+            return
+        entry = facts.get(display_name)
+        rounded = round(abs(rate_percent), 2)
+        direction = "증가" if rate_percent > 0 else "감소" if rate_percent < 0 else "동일"
+        if entry is None:
+            facts[display_name] = {
+                "percent": rounded,
+                "direction": direction,
+                "conflict": False,
+            }
+            return
+        if entry["conflict"]:
+            return
+        if entry["percent"] != rounded or entry["direction"] != direction:
+            entry["conflict"] = True
+
+    for reason in reasons:
+        display_name = str(reason.get("displayName") or reason.get("featureKey") or "")
+        change_rate = _number(reason.get("changeRate"))
+        if change_rate is not None:
+            register(display_name, change_rate * 100.0)
+
+    for feature_key in OBSERVABLE_FEATURES:
+        if feature_key in LEAKAGE_FEATURES or feature_key not in current:
+            continue
+        previous_value = resolve_previous_value(current, previous, feature_key)
+        rate = _percent_change(current.get(feature_key), previous_value)
+        register(_observed_display_name(feature_key), rate)
+
+    return facts
 
 
 def build_allowed_review_checks(reasons: list[dict[str, Any]]) -> list[str]:
@@ -539,4 +619,6 @@ def build_llm_input(
         "observedChanges": changes,
         "indicatorCandidates": indicator_candidates,
         "allowedReviewChecks": build_allowed_review_checks(reasons),
+        # 검증 전용 기준표. 프롬프트가 아니라 llm.py의 결정론적 대조에 쓰인다.
+        "featureChangeFacts": build_feature_change_facts(current, previous, reasons),
     }
