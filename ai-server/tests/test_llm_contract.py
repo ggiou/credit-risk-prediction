@@ -431,6 +431,57 @@ def test_confirmed_risk_effect_is_normalized_without_retry():
     )
 
 
+def test_summary_backend_facts_are_normalized_without_retry():
+    output = valid_output()
+    output["summary"] = (
+        "수치가 작을수록 비교군 내 위험 우선순위가 높습니다. "
+        "1개월 구간의 우선 검토가 필요합니다."
+    )
+
+    class SingleResponse:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(output_text=json.dumps(output, ensure_ascii=False))
+
+    responses = SingleResponse()
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.model = "test-model"
+    client.timeout_seconds = 60
+
+    result = client.generate(input_payload=llm_input())
+
+    assert result.status == "COMPLETED"
+    assert responses.calls == 1
+    assert result.structured_output["summary"] == (
+        "모델 등급은 주의이며 고위험 순위 기준 0.33% 지점입니다. "
+        "수치가 작을수록 비교군 내 위험 우선순위가 높습니다. "
+        "1개월 구간의 우선 검토가 필요합니다."
+    )
+
+
+def test_valid_summary_is_preserved_without_normalization():
+    output = valid_output()
+    original_summary = output["summary"]
+
+    class SingleResponse:
+        def create(self, **kwargs):
+            return SimpleNamespace(output_text=json.dumps(output, ensure_ascii=False))
+
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=SingleResponse())
+    client.model = "test-model"
+    client.timeout_seconds = 60
+
+    result = client.generate(input_payload=llm_input())
+
+    assert result.status == "COMPLETED"
+    assert result.structured_output["summary"] == original_summary
+
+
 def test_lightgbm_name_is_removed_from_model_interpretation_without_retry():
     output = valid_output()
     output["modelInterpretation"] = (
