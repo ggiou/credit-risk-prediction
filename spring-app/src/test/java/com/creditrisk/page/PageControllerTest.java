@@ -30,4 +30,14 @@ class PageControllerTest {
         assertThat(view).isEqualTo("prediction/history");
         assertThat(model.getAttribute("menu")).isEqualTo("predictions");
     }
+
+    @Test
+    void batchAdminPageIsAvailableWithoutAddingARegularMenuState() {
+        ConcurrentModel model = new ConcurrentModel();
+
+        String view = controller.predictionBatchAdmin(model);
+
+        assertThat(view).isEqualTo("admin/prediction-batches");
+        assertThat(model.getAttribute("menu")).isEqualTo("");
+    }
 }

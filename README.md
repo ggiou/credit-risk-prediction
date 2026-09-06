@@ -69,6 +69,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+## 관리자 다건 AI 분석
+
+일반 대시보드 메뉴에는 다건 분석 화면을 노출하지 않는다. 관리자는 `/admin/prediction-batches`에 직접 접근한 뒤 `config/application-secret.yml`에 설정한 별도 계정으로 로그인한다.
+
+```yaml
+admin:
+  batch:
+    email: "admin@example.com"
+    password: "CHANGE_ME"
+```
+
+관리자 세션이 없는 `/api/v1/admin/prediction-batches/**` 요청은 `401`로 차단된다. 한 요청에서 최대 50명을 처리하고 AI 호출 동시성은 기본 2개로 제한한다. 다건 작업의 진행 상태는 서버 메모리에서만 관리하며, 고객별 최종 예측 결과만 기존 `prediction_result` 저장 흐름을 사용한다.
+
 ## 실패 처리 기준
 
 - 피처 스냅샷 없음: `FEATURE_SNAPSHOT_NOT_FOUND`
