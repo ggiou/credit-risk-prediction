@@ -7,11 +7,13 @@
         </div>
         <fieldset class="bulk-search-type">
             <legend>검색 기준</legend>
-            <label><input type="radio" name="bulkSearchType" value="customerIds" checked> 고객번호</label>
-            <label><input type="radio" name="bulkSearchType" value="customerNames"> 고객명</label>
+            <div class="bulk-search-type-options">
+                <label><input type="radio" name="bulkSearchType" value="customerIds" checked><span>고객번호</span></label>
+                <label><input type="radio" name="bulkSearchType" value="customerNames"><span>고객명</span></label>
+            </div>
         </fieldset>
         <label class="bulk-search-input-label" for="bulkCustomerValues">검색값</label>
-        <textarea id="bulkCustomerValues" rows="9" placeholder="다량입력은 줄바꿈 및 , 로 가능합니다"></textarea>
+        <textarea id="bulkCustomerValues" rows="9" placeholder="고객번호를 입력해주세요"></textarea>
         <div class="bulk-search-help">
             <span>다량입력은 줄바꿈 및 , 로 가능합니다</span>
             <strong id="bulkCustomerValueCount">0 / 50개</strong>
