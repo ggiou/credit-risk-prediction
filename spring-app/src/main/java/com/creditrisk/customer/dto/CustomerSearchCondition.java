@@ -17,5 +17,6 @@ public record CustomerSearchCondition(
         int offset,
         String sortField,
         String sortDirection,
-        String modelVersion) {
+        String modelVersion,
+        String promptVersion) {
 }

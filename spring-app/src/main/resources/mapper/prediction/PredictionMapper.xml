@@ -198,14 +198,19 @@
 
     <update id="updateRetriedExplanation" parameterType="map">
         UPDATE prediction_result
-        SET risk_grade = #{riskGrade},
+        SET hazard_1m = #{hazard1m},
+            hazard_2m = #{hazard2m},
+            hazard_3m = #{hazard3m},
+            cumulative_risk_3m = #{cumulativeRisk3m},
+            risk_grade = #{riskGrade},
             percentile = #{percentile},
             reasons = CAST(#{reasons} AS JSON),
             explanation = #{explanation},
             recommendation = #{recommendation},
             llm_output = CAST(#{llmOutput} AS JSON),
             llm_status = #{llmStatus},
-            prompt_version = #{promptVersion}
+            prompt_version = #{promptVersion},
+            predicted_at = #{predictedAt}
         WHERE prediction_id = #{predictionId}
           AND (llm_status != 'COMPLETED'
             OR explanation IS NULL
