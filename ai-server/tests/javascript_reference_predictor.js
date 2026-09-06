@@ -15,13 +15,25 @@ function sigmoid(score) {
 function predict(vector) {
   let raw = 0;
   for (const tree of model.trees) {
-    const [featureIndex, categorical, threshold, defaultLeft, zeroAsMissing, leftLeaf, rightLeaf] = tree;
+    const [featureIndex, categorical, threshold, defaultLeft, missingTypeValue, leftLeaf, rightLeaf] = tree;
     const value = vector[featureIndex];
-    const missing = value === null || Number.isNaN(value) || (zeroAsMissing && value === 0);
+    const missingType = Number(missingTypeValue);
+    const missing = value === null || Number.isNaN(value);
     let left;
-    if (missing) left = Boolean(defaultLeft);
-    else if (categorical) left = threshold.map(Number).includes(Number(value));
-    else left = Number(value) <= Number(threshold);
+    if (categorical) {
+      if (missing) left = false;
+      else {
+        const category = Number(value);
+        left = category >= 0 && threshold.map(Number).includes(category);
+      }
+    } else {
+      const numericValue = missing && missingType !== 1 ? 0 : Number(value);
+      if ((missingType === 1 && missing) || (missingType === 2 && numericValue === 0)) {
+        left = Boolean(defaultLeft);
+      } else {
+        left = numericValue <= Number(threshold);
+      }
+    }
     raw += left ? Number(leftLeaf) : Number(rightLeaf);
   }
   return sigmoid(raw);

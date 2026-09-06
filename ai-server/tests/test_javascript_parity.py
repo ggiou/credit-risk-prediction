@@ -19,8 +19,10 @@ def test_python_json_runtime_matches_javascript_reference_for_300_rows():
         current = {}
         previous = {}
         for feature in model.features[:36]:
-            current[feature] = rng.randint(0, 1_000_000)
-            previous[feature] = rng.randint(0, 1_000_000)
+            # 실제 합성 데이터처럼 0을 충분히 포함해야 missingType=NaN과
+            # missingType=Zero의 분기 차이를 parity 검증에서 놓치지 않는다.
+            current[feature] = 0 if rng.random() < 0.2 else rng.randint(1, 1_000_000)
+            previous[feature] = 0 if rng.random() < 0.2 else rng.randint(1, 1_000_000)
         current["연령"] = rng.choice(model.cat_features["연령"])
         current["Life_Stage"] = rng.choice(model.cat_features["Life_Stage"])
         previous["연령"] = rng.choice(model.cat_features["연령"])
