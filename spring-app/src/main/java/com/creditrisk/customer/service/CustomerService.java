@@ -27,15 +27,18 @@ public class CustomerService {
     private final CustomerMapper customerMapper;
     private final MetaService metaService;
     private final String modelVersion;
+    private final String promptVersion;
 
     /** 고객 조회 의존성과 활성 모델 버전을 주입받는다. */
     public CustomerService(
             CustomerMapper customerMapper,
             MetaService metaService,
-            @Value("${ai.model.version}") String modelVersion) {
+            @Value("${ai.model.version}") String modelVersion,
+            @Value("${ai.model.prompt-version}") String promptVersion) {
         this.customerMapper = customerMapper;
         this.metaService = metaService;
         this.modelVersion = modelVersion;
+        this.promptVersion = promptVersion;
     }
 
     /**
@@ -71,7 +74,8 @@ public class CustomerService {
                 page * size,
                 sortParts[0],
                 sortParts[1].toUpperCase(),
-                modelVersion);
+                modelVersion,
+                promptVersion);
 
         List<CustomerListItem> items = customerMapper.findCustomers(condition).stream()
                 .map(this::toListItem)

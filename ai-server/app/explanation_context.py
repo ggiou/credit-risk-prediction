@@ -151,6 +151,21 @@ def _llm_reason(reason: dict[str, Any]) -> dict[str, Any]:
     if current_value is not None and previous_value is not None and absolute_change is not None:
         feature_name = str(reason.get("displayName") or reason.get("featureKey"))
         change_direction = "증가" if current_value > previous_value else "감소" if current_value < previous_value else "동일"
+        topic = _topic(feature_name)
+        if change_direction == "동일":
+            prepared["valueChangeSummaryStatement"] = f"{topic} 전월과 동일했습니다."
+            prepared["valueChangeDetailStatement"] = (
+                f"{topic} 전월과 현재 모두 {prepared['currentValueDisplay']}로 동일했습니다."
+            )
+        else:
+            if change_rate is not None:
+                prepared["valueChangeSummaryStatement"] = (
+                    f"{topic} 전월보다 {prepared['changeRateDisplay']} {change_direction}했습니다."
+                )
+            prepared["valueChangeDetailStatement"] = (
+                f"{topic} 전월 {prepared['previousValueDisplay']}에서 현재 "
+                f"{_directional(prepared['currentValueDisplay'])} {absolute_change} {change_direction}했습니다."
+            )
         value_statement = (
             f"{feature_name}의 전월 스냅샷은 {prepared['previousValueDisplay']}, "
             f"현재는 {prepared['currentValueDisplay']}이며 {absolute_change} {change_direction}"
@@ -189,6 +204,78 @@ def _topic(subject: str) -> str:
     last = subject[-1]
     has_batchim = "가" <= last <= "힣" and (ord(last) - ord("가")) % 28 != 0
     return f"{subject}{'은' if has_batchim else '는'}"
+
+
+def _object(subject: str) -> str:
+    if not subject:
+        return ""
+    last = subject[-1]
+    has_batchim = "가" <= last <= "힣" and (ord(last) - ord("가")) % 28 != 0
+    return f"{subject}{'을' if has_batchim else '를'}"
+
+
+def _directional(subject: str) -> str:
+    """표시값 뒤의 '로/으로' 조사를 자연스럽게 붙인다."""
+
+    if not subject:
+        return subject
+    last = subject[-1]
+    if "가" <= last <= "힣":
+        jongseong = (ord(last) - ord("가")) % 28
+        return f"{subject}{'으로' if jongseong not in {0, 8} else '로'}"
+    return f"{subject}로"
+
+
+def _join_feature_names(names: list[str]) -> str:
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        first = names[0]
+        last = first[-1]
+        has_batchim = "가" <= last <= "힣" and (ord(last) - ord("가")) % 28 != 0
+        return f"{first}{'과' if has_batchim else '와'} {names[1]}"
+    return ", ".join(names)
+
+
+def _counterfactual_comparison_facts(reasons: list[dict[str, Any]]) -> list[str]:
+    """동일 패턴에서 표시상 같은 순위 이동은 피처명을 묶어 한 문장으로 만든다."""
+
+    grouped: dict[tuple[float, float], list[str]] = {}
+    fallback: list[str] = []
+    for reason in reasons:
+        current_top = _number(reason.get("currentTopRiskPercent"))
+        counterfactual_top = _number(reason.get("counterfactualTopRiskPercent"))
+        difference = _number(reason.get("topRiskPercentDifference"))
+        if current_top is None or counterfactual_top is None or difference is None:
+            statement = str(reason.get("counterfactualComparisonStatement", "")).strip()
+            if statement:
+                fallback.append(statement)
+            continue
+        signature = (_display_top_risk(current_top), _display_top_risk(counterfactual_top))
+        name = str(reason.get("displayName") or reason.get("featureKey"))
+        grouped.setdefault(signature, []).append(name)
+
+    facts: list[str] = []
+    for (display_current, display_counterfactual), raw_names in grouped.items():
+        names = list(dict.fromkeys(raw_names))
+        subjects = _join_feature_names(names)
+        target = _object(subjects)
+        plural = len(names) > 1
+        replacement = "각각 전월값으로" if plural else "전월값으로"
+        if display_current == display_counterfactual:
+            facts.append(
+                f"{target} {replacement} 대체한 재채점에서도 표시상 고위험 순위는 "
+                f"{display_current:.1f}%로 동일했습니다."
+            )
+        else:
+            movement = abs(display_current - display_counterfactual)
+            common = "모두 " if plural else ""
+            facts.append(
+                f"{target} {replacement} 대체한 재채점에서는 고위험 순위가 "
+                f"{common}현재 {display_current:.1f}%에서 {display_counterfactual:.1f}%로 "
+                f"{movement:.1f}%p 이동했습니다."
+            )
+    return list(dict.fromkeys([*facts, *fallback]))
 
 
 def _observed_display_name(feature_key: str) -> str:
@@ -292,6 +379,7 @@ def _indicator_candidates(
     """LLM이 수치를 계산하지 않도록 카드의 사실·관계·출처를 결정적으로 만든다."""
 
     candidates: list[dict[str, Any]] = []
+    candidate_index_by_pattern: dict[str, int] = {}
     linked_signals: set[str] = set()
     grouped_reasons: dict[str, list[dict[str, Any]]] = {}
     for reason in reasons:
@@ -316,18 +404,21 @@ def _indicator_candidates(
             key for signal in related for key in signal.get("featureKeys", [])
         }
         observed_facts.extend(
-            str(reason["valueChangeStatement"]).strip()
+            str(reason["valueChangeSummaryStatement"]).strip()
             for reason in pattern_reasons
-            if reason.get("valueChangeStatement")
+            if reason.get("valueChangeSummaryStatement")
             and reason.get("featureKey") not in observed_feature_keys
         )
-        comparison_facts = [
-            str(reason["counterfactualComparisonStatement"]).strip()
+        value_details = list(dict.fromkeys(
+            str(reason["valueChangeDetailStatement"]).strip()
             for reason in pattern_reasons
-            if reason.get("counterfactualComparisonStatement")
-        ]
-        facts = [*observed_facts, *comparison_facts]
-        facts = list(dict.fromkeys(fact for fact in facts if fact))
+            if reason.get("valueChangeDetailStatement")
+        ))
+        comparison_facts = _counterfactual_comparison_facts(pattern_reasons)
+        facts = list(dict.fromkeys(fact for fact in observed_facts if fact))
+        details = list(dict.fromkeys(
+            detail for detail in [*value_details, *comparison_facts] if detail
+        ))
         feature_keys = list(dict.fromkeys(str(reason["featureKey"]) for reason in pattern_reasons))
         for signal in related:
             for key in signal.get("featureKeys", []):
@@ -335,10 +426,12 @@ def _indicator_candidates(
                     feature_keys.append(key)
         directions = {reason.get("modelDirection") for reason in pattern_reasons}
         has_mixed_period_signal = any("했지만" in str(signal.get("statement")) for signal in related)
+        candidate_index_by_pattern[pattern_code] = len(candidates)
         candidates.append({
             "indicatorId": f"K{len(candidates) + 1}",
             "title": INDICATOR_TITLES.get(pattern_code, str(pattern_reasons[0].get("patternName"))),
             "fact": " ".join(facts),
+            "detail": " ".join(details),
             "modelRelation": (
                 "MIXED" if len(directions) > 1 or has_mixed_period_signal
                 else "RISK_INCREASE" if "INCREASE_RISK" in directions else "RISK_DECREASE"
@@ -359,10 +452,30 @@ def _indicator_candidates(
         }.get(str(signal.get("relationToModel")), "CONTEXT")
         if "했지만" in str(signal.get("statement")):
             relation = "MIXED"
+        existing_index = candidate_index_by_pattern.get(pattern_code)
+        if existing_index is not None:
+            candidate = candidates[existing_index]
+            statement = str(signal["statement"]).strip()
+            current_fact = str(candidate["fact"]).strip()
+            if statement and statement not in current_fact:
+                candidate["fact"] = f"{current_fact} {statement}".strip()
+            if signal["signalId"] not in candidate["signalIds"]:
+                candidate["signalIds"].append(signal["signalId"])
+            for key in feature_keys:
+                if key not in candidate["featureKeys"]:
+                    candidate["featureKeys"].append(key)
+            current_relation = str(candidate["modelRelation"])
+            if current_relation == "CONTEXT":
+                candidate["modelRelation"] = relation
+            elif relation not in {"CONTEXT", current_relation}:
+                candidate["modelRelation"] = "MIXED"
+            continue
+        candidate_index_by_pattern[pattern_code] = len(candidates)
         candidates.append({
             "indicatorId": f"K{len(candidates) + 1}",
             "title": INDICATOR_TITLES[pattern_code],
             "fact": str(signal["statement"]),
+            "detail": "",
             "modelRelation": relation,
             "reasonIds": [],
             "signalIds": [signal["signalId"]],

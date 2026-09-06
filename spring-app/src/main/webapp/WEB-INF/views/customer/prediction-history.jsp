@@ -11,4 +11,4 @@
     <div class="table-wrap"><table><thead><tr><th>분석일시</th><th>기준월</th><th>1개월</th><th>2개월</th><th>3개월</th><th>등급</th><th>모델</th><th>LLM</th><th>상세</th></tr></thead><tbody id="customerHistoryTable"></tbody></table></div>
 </section>
 <p id="pageError" class="error-message" hidden></p>
-</main></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260830-3"></script><script src="${pageContext.request.contextPath}/js/customer-prediction-history.js?v=20260905-1"></script></body></html>
+</main></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260906-1"></script><script src="${pageContext.request.contextPath}/js/customer-prediction-history.js?v=20260906-1"></script></body></html>

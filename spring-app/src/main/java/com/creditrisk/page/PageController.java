@@ -92,6 +92,13 @@ public class PageController {
         return "prediction/history";
     }
 
+    /** 일반 메뉴에 노출하지 않는 관리자 다건 AI 분석 화면을 반환한다. */
+    @GetMapping("/admin/prediction-batches")
+    public String predictionBatchAdmin(Model model) {
+        model.addAttribute("menu", "");
+        return "admin/prediction-batches";
+    }
+
     /** 고객 상세 화면이 공통으로 사용하는 모델 속성을 추가한다. */
     private void addCustomerModel(Model model, String customerId, String activeTab) {
         // JSP와 JavaScript가 URL을 다시 해석하지 않도록 서버에서 명시적으로 전달한다.

@@ -51,14 +51,14 @@ class PredictionCommandServiceTest {
                 aiPredictionClient,
                 new ObjectMapper(),
                 MODEL_VERSION,
-                "v3.2");
+                "v3.3");
         when(predictionMapper.findFeatureSnapshots(CUSTOMER_ID, BASE_YM, "201811"))
                 .thenReturn(List.of(currentSnapshot()));
     }
 
     @Test
     void reusesResultWhenCompletedExplanationExists() {
-        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명", "v3.2");
+        Map<String, Object> reused = reusedResult("COMPLETED", "완료된 설명", "v3.3");
         PredictionDetailResponse detail = detail("COMPLETED", "완료된 설명");
         when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
         when(predictionQueryService.toDetail(reused)).thenReturn(detail);
@@ -157,6 +157,7 @@ class PredictionCommandServiceTest {
                 "keyIndicators", List.of(Map.of(
                         "title", "청구 부담 흐름",
                         "fact", "당월 청구금액은 전월보다 0.13% 증가했습니다.",
+                        "detail", "당월 청구금액은 전월 100,000원에서 현재 100,130원으로 130원 증가했습니다.",
                         "interpretation", "당월 청구 흐름은 모델 비교 근거입니다.",
                         "modelRelation", "RISK_DECREASE",
                         "reasonIds", List.of("R1"),
@@ -173,7 +174,7 @@ class PredictionCommandServiceTest {
                         "text", "다음 결제 예정 금액과 최근 납부 이력 확인",
                         "reasonIds", List.of("R1"),
                         "signalIds", List.of("S1")))));
-        response.put("llm", Map.of("status", "COMPLETED", "promptVersion", "v3.2"));
+        response.put("llm", Map.of("status", "COMPLETED", "promptVersion", "v3.3"));
         response.put("predictedAt", "2026-09-01T00:00:00Z");
         return response;
     }
@@ -199,7 +200,7 @@ class PredictionCommandServiceTest {
                 explanation,
                 null,
                 null,
-                new PredictionDetailResponse.Llm(llmStatus, "v3.2", "v3.2", false),
+                new PredictionDetailResponse.Llm(llmStatus, "v3.3", "v3.3", false),
                 Instant.parse("2026-09-01T00:00:00Z"));
     }
 }

@@ -69,4 +69,4 @@
     <div id="modelMeta" class="meta-row"></div>
 </section>
 </div><p id="pageError" class="error-message" hidden></p>
-</main></div><div id="predictionLoading" class="loading-overlay" role="status" aria-live="polite" aria-label="AI 분석 실행 중" hidden><div class="loading-dialog"><span class="loading-spinner" aria-hidden="true"></span><strong>AI 분석을 실행 중입니다.</strong><p>위험률과 주요 지표를 계산하고 있습니다.<br>잠시만 기다려 주세요.</p></div></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260830-3"></script><script src="${pageContext.request.contextPath}/js/customer-detail.js?v=20260905-8"></script></body></html>
+</main></div><div id="predictionLoading" class="loading-overlay" role="status" aria-live="polite" aria-label="AI 분석 실행 중" hidden><div class="loading-dialog"><span class="loading-spinner" aria-hidden="true"></span><strong>AI 분석을 실행 중입니다.</strong><p>위험률과 주요 지표를 계산하고 있습니다.<br>잠시만 기다려 주세요.</p></div></div><script src="${pageContext.request.contextPath}/js/api.js?v=20260830-3"></script><script src="${pageContext.request.contextPath}/js/customer-detail.js?v=20260906-3"></script></body></html>

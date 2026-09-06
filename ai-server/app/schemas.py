@@ -16,7 +16,7 @@ class PredictRequest(BaseModel):
     previousFeatureSnapshotId: int | None = None
     featureSchemaVersion: str
     expectedModelVersion: str
-    promptVersion: str = "v3.2"
+    promptVersion: str = "v3.6"
     generateExplanation: bool = True
     currentFeatures: dict[str, Any]
     previousFeatures: dict[str, Any] | None = None
@@ -76,6 +76,7 @@ class ReviewPoint(BaseModel):
 class KeyIndicator(BaseModel):
     title: str
     fact: str
+    detail: str = ""
     interpretation: str
     modelRelation: Literal["RISK_INCREASE", "RISK_DECREASE", "MIXED", "CONTEXT"]
     reasonIds: list[str]

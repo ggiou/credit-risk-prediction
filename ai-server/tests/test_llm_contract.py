@@ -12,7 +12,7 @@ def llm_input():
     return {
         "modelContext": {
             "modelVersion": "miribom-lgbm-v0.3",
-            "promptVersion": "v3.2",
+            "promptVersion": "v3.3",
             "predictionSource": "LIGHTGBM_JSON",
             "dataType": "PUBLIC_SYNTHETIC_DEMO",
             "target": "기준월 이후 1·2·3개월째 연체 발생 위험",
@@ -126,7 +126,7 @@ def test_validation_removes_backend_fact_repeated_in_model_interpretation():
 
 def test_validation_still_rejects_duplicate_llm_generated_sentences():
     output = valid_output()
-    output["changeContext"] = output["modelInterpretation"]
+    output["modelInterpretation"] = output["summary"]
 
     with pytest.raises(ValueError, match="duplicate sentences"):
         object.__new__(RiskExplanationClient)._validate(output, llm_input())
@@ -200,6 +200,38 @@ def test_validation_rejects_risk_signal_when_all_reasons_mitigate_risk():
         object.__new__(RiskExplanationClient)._validate(valid_output(), input_payload)
 
 
+def test_decrease_only_validation_does_not_reject_backend_fixed_fact_text():
+    input_payload = llm_input()
+    input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
+    input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
+    input_payload["indicatorCandidates"][0]["fact"] += " 위험 신호 관련 관찰 문구입니다."
+    output = valid_output()
+    output["modelInterpretation"] = "모델은 카드 이용 가능 상태를 위험 감소 방향의 비교 근거로 포착했습니다."
+    output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
+    output["keyIndicators"][0]["fact"] = input_payload["indicatorCandidates"][0]["fact"]
+
+    _, structured = object.__new__(RiskExplanationClient)._validate(output, input_payload)
+
+    assert structured["keyIndicators"][0]["fact"].endswith("관찰 문구입니다.")
+
+
+def test_decrease_only_reasons_allow_peak_risk_signal_in_summary():
+    input_payload = llm_input()
+    input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
+    input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
+    output = valid_output()
+    output["summary"] = (
+        "모델 등급은 주의이며 고위험 순위 기준 0.33% 지점으로, 수치가 작을수록 비교군 내 "
+        "위험 우선순위가 높습니다. 위험 신호는 1개월 구간에서 가장 높아 관리 우선순위는 우선 검토입니다."
+    )
+    output["modelInterpretation"] = "모델은 카드 이용 가능 상태를 위험 감소 방향의 비교 근거로 포착했습니다."
+    output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
+
+    _, structured = object.__new__(RiskExplanationClient)._validate(output, input_payload)
+
+    assert "위험 신호는 1개월" in structured["summary"]
+
+
 def test_validation_rejects_counterfactual_disclaimer_rendered_by_ui():
     output = valid_output()
     output["modelInterpretation"] += " 해당 결과는 고객별 확정 원인이나 SHAP 기여가 아닙니다."
@@ -214,12 +246,58 @@ def test_validation_rejects_noun_form_sentence_endings():
         object.__new__(RiskExplanationClient)._validate(output, llm_input())
 
 
+def test_validation_rejects_internal_field_name_in_display_narrative():
+    output = valid_output()
+    output["modelInterpretation"] = "각 재채점에서 modelDirection은 위험 감소로 일관되었습니다."
+
+    with pytest.raises(ValueError, match="internal field name"):
+        object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+
+def test_validation_rejects_model_conclusion_in_change_context():
+    output = valid_output()
+    output["changeContext"] = "관찰 흐름은 혼재되어 있으며 모델의 재채점은 위험 감소 방향입니다."
+
+    with pytest.raises(ValueError, match="observed changes only"):
+        object.__new__(RiskExplanationClient)._validate(output, llm_input())
+
+
+def test_validation_requires_limited_interpretation_for_divergent_direction():
+    input_payload = llm_input()
+    input_payload["modelReasons"][0].update(direction="INCREASE", modelDirection="DECREASE_RISK")
+    input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
+    output = valid_output()
+    output["modelInterpretation"] = "선택된 근거는 모델의 국소 재채점에서 위험 감소 방향으로 나타났습니다."
+    output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
+    output["keyIndicators"][0]["interpretation"] = "관찰된 값은 증가했지만 모델 반응은 위험 감소 방향으로 나타났습니다."
+
+    with pytest.raises(ValueError, match="limited interpretation"):
+        object.__new__(RiskExplanationClient)._validate(output, input_payload)
+
+
+def test_validation_accepts_limited_interpretation_for_divergent_direction():
+    input_payload = llm_input()
+    input_payload["modelReasons"][0].update(direction="INCREASE", modelDirection="DECREASE_RISK")
+    input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
+    output = valid_output()
+    output["modelInterpretation"] = "선택된 근거는 모델의 국소 재채점에서 위험 감소 방향으로 나타났습니다."
+    output["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
+    output["keyIndicators"][0]["interpretation"] = (
+        "관찰된 변화와 모델의 국소 재채점 방향이 다릅니다. "
+        "다른 피처와의 조합에서 나타난 반응으로 제한하여 해석할 필요가 있습니다."
+    )
+
+    _, structured = object.__new__(RiskExplanationClient)._validate(output, input_payload)
+
+    assert "제한하여 해석" in structured["keyIndicators"][0]["interpretation"]
+
+
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
         (lambda output: output.update(usedReasonIds=["R404"]), "unknown reason ID"),
         (lambda output: output["reviewPoints"].extend(copy.deepcopy(output["reviewPoints"]) * 2), "zero to two"),
-        (lambda output: output.update(changeContext="c3 누적 위험은 12%입니다."), "c3/cumulative"),
+        (lambda output: output.update(changeContext="c3 누적 위험은 12%입니다."), "internal field name"),
         (lambda output: output.update(modelInterpretation="horizon이 고객 위험 근거입니다."), "horizon"),
         (lambda output: output.update(changeContext="이번 달 강제 한도 감액이 신규 발생했습니다."), "unchanged R12M"),
         (lambda output: output.update(changeContext="생활고로 카드 사용 불능 상태입니다."), "unsupported circumstance"),
@@ -288,6 +366,93 @@ def test_validation_failure_gets_one_correction_retry():
     assert "unknown reason ID" in responses.inputs[1]["correction"]
 
 
+def test_confirmed_risk_effect_is_normalized_without_retry():
+    invalid = valid_output()
+    invalid["modelInterpretation"] = "카드 이용 가능 상태에서 위험 증가가 확인되었습니다."
+
+    class SingleResponse:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(output_text=json.dumps(invalid, ensure_ascii=False))
+
+    responses = SingleResponse()
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.model = "test-model"
+    client.timeout_seconds = 60
+
+    result = client.generate(input_payload=llm_input())
+
+    assert result.status == "COMPLETED"
+    assert responses.calls == 1
+    assert result.structured_output["modelInterpretation"] == (
+        "선택된 근거는 모델의 국소 재채점에서 모두 위험 증가 방향의 비교 근거로 나타났습니다."
+    )
+
+
+def test_lightgbm_name_is_removed_from_model_interpretation_without_retry():
+    output = valid_output()
+    output["modelInterpretation"] = (
+        "LightGBM은 카드 이용 가능 상태 패턴을 위험 증가 방향의 우선 근거로 포착했습니다."
+    )
+
+    class SingleResponse:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(output_text=json.dumps(output, ensure_ascii=False))
+
+    responses = SingleResponse()
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.model = "test-model"
+    client.timeout_seconds = 60
+
+    result = client.generate(input_payload=llm_input())
+
+    assert result.status == "COMPLETED"
+    assert responses.calls == 1
+    assert result.structured_output["modelInterpretation"] == (
+        "모델은 카드 이용 가능 상태 패턴을 위험 증가 방향의 우선 근거로 포착했습니다."
+    )
+
+
+def test_decrease_only_retry_receives_actionable_korean_correction():
+    input_payload = llm_input()
+    input_payload["modelReasons"][0]["modelDirection"] = "DECREASE_RISK"
+    input_payload["indicatorCandidates"][0]["modelRelation"] = "RISK_DECREASE"
+    invalid = valid_output()
+    invalid["keyIndicators"][0]["modelRelation"] = "RISK_DECREASE"
+    corrected = copy.deepcopy(invalid)
+    corrected["modelInterpretation"] = "모델은 카드 이용 가능 상태를 위험 감소 방향의 비교 근거로 포착했습니다."
+
+    class ValidationResponses:
+        def __init__(self):
+            self.inputs = []
+
+        def create(self, **kwargs):
+            self.inputs.append(json.loads(kwargs["input"]))
+            payload = invalid if len(self.inputs) == 1 else corrected
+            return SimpleNamespace(output_text=json.dumps(payload, ensure_ascii=False))
+
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=ValidationResponses())
+    client.model = "test-model"
+    client.timeout_seconds = 60
+
+    result = client.generate(input_payload=input_payload)
+
+    assert result.status == "COMPLETED"
+    correction = client.client.responses.inputs[1]["correction"]
+    assert "위험 신호·위험 근거·위험 요인·선행 신호" in correction
+    assert "위험 감소 방향의 비교 근거" in correction
+
+
 def test_openai_request_uses_versioned_explicit_prompt_cache():
     class CapturingResponses:
         def __init__(self):
@@ -306,7 +471,13 @@ def test_openai_request_uses_versioned_explicit_prompt_cache():
     result = client.generate(input_payload=llm_input())
 
     assert result.status == "COMPLETED"
-    assert responses.request["prompt_cache_key"] == "miribom-risk-explanation:v3.2"
+    assert responses.request["prompt_cache_key"] == "miribom-risk-explanation:v3.3"
     assert responses.request["prompt_cache_options"] == {"mode": "explicit", "ttl": "30m"}
+    review_schema = responses.request["text"]["format"]["schema"]["properties"]["reviewPoints"]
+    assert review_schema["minItems"] == 1
+    assert review_schema["maxItems"] == 2
     assert "모델 방향이 위험 감소이면서" in SYSTEM_RULES
     assert "표시상 고위험 순위" in SYSTEM_RULES
+    assert "정상 등급: 0~1개" in SYSTEM_RULES
+    assert "관심·주의·경고 등급: 1~2개" in SYSTEM_RULES
+    assert "내부 필드명을 화면 문장에 직접 쓰지 않는다" in SYSTEM_RULES
