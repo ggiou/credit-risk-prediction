@@ -6,7 +6,9 @@ import com.creditrisk.common.domain.AnalysisStatus;
 import com.creditrisk.common.domain.RiskGrade;
 import com.creditrisk.common.web.QueryValidator;
 import com.creditrisk.common.web.RequestIds;
+import com.creditrisk.common.web.BulkSearchValues;
 import com.creditrisk.customer.dto.CustomerListItem;
+import com.creditrisk.customer.dto.CustomerAnalysisOrder;
 import com.creditrisk.customer.dto.CustomerSummaryResponse;
 import com.creditrisk.customer.dto.FinancialDataResponse;
 import com.creditrisk.customer.service.CustomerDetailService;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -128,8 +131,11 @@ public class CustomerController {
     public ApiResponse<PageData<CustomerListItem>> searchCustomers(
             @RequestParam(required = false) String baseYm,
             @RequestParam(required = false) String customerId,
+            @RequestParam(required = false) List<String> customerIds,
+            @RequestParam(required = false) List<String> customerNames,
             @RequestParam(required = false) RiskGrade riskGrade,
             @RequestParam(required = false) AnalysisStatus analysisStatus,
+            @RequestParam(defaultValue = "COMPLETED_FIRST") CustomerAnalysisOrder analysisOrder,
             @RequestParam(defaultValue = "3") int horizon,
             @RequestParam(required = false) Double minRiskRate,
             @RequestParam(required = false) Double maxRiskRate,
@@ -142,12 +148,21 @@ public class CustomerController {
         QueryValidator.validatePage(page, size);
         QueryValidator.validateSort(sort, SORT_FIELDS);
         validateRiskRange(horizon, minRiskRate, maxRiskRate);
+        List<String> normalizedCustomerIds = BulkSearchValues.normalize(customerIds, "customerIds");
+        List<String> normalizedCustomerNames = BulkSearchValues.normalize(customerNames, "customerNames");
+        if (normalizedCustomerIds != null && normalizedCustomerNames != null) {
+            throw new IllegalArgumentException("customerIds와 customerNames는 동시에 사용할 수 없습니다.");
+        }
+        boolean hasBulkSearch = normalizedCustomerIds != null || normalizedCustomerNames != null;
 
         PageData<CustomerListItem> response = customerService.searchCustomers(
                 baseYm,
-                customerId,
+                hasBulkSearch ? null : customerId,
+                normalizedCustomerIds,
+                normalizedCustomerNames,
                 riskGrade,
                 analysisStatus == null ? null : analysisStatus.name(),
+                analysisOrder.name(),
                 horizon,
                 minRiskRate,
                 maxRiskRate,

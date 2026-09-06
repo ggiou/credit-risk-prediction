@@ -28,6 +28,8 @@ public class PredictionHistoryService {
      */
     public PageData<PredictionHistoryItem> search(
             String customerId,
+            List<String> customerIds,
+            List<String> customerNames,
             String baseYm,
             RiskGrade riskGrade,
             String modelVersion,
@@ -40,6 +42,8 @@ public class PredictionHistoryService {
         // DB에 저장된 영문 위험등급 코드로 Mapper 검색 조건을 구성한다.
         PredictionHistoryCondition condition = new PredictionHistoryCondition(
                 blankToNull(customerId),
+                customerIds,
+                customerNames,
                 blankToNull(baseYm),
                 riskGrade == null ? null : riskGrade.name(),
                 blankToNull(modelVersion),
@@ -64,6 +68,7 @@ public class PredictionHistoryService {
                 longValue(row.get("predictionId")),
                 instantValue(row.get("predictedAt")),
                 stringValue(row.get("customerId")),
+                nullableString(row.get("displayName")),
                 stringValue(row.get("baseYm")),
                 doubleValue(row.get("hazard1m")),
                 doubleValue(row.get("hazard2m")),
