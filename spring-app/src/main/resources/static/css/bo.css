@@ -2179,20 +2179,41 @@ body.has-modal {
 }
 
 .bulk-search-trigger {
+    position: relative;
     flex: 0 0 auto;
-    padding: 10px 12px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: #fff;
     color: var(--blue);
-    font-size: 12px;
+    font-size: 23px;
     font-weight: 700;
-    white-space: nowrap;
+    line-height: 1;
 }
 
 .bulk-search-trigger.is-active {
     border-color: var(--blue);
     background: #eef5ff;
+}
+
+.bulk-search-trigger.is-active::after {
+    content: attr(data-count);
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    display: grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    background: var(--blue);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
 }
 
 .bulk-search-modal {

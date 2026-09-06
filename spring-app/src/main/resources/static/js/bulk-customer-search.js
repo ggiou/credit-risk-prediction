@@ -27,13 +27,18 @@ const BOBulkCustomerSearch = (() => {
 
         function updateTrigger() {
             if (!applied) {
-                trigger.textContent = "+ 다량 입력";
                 trigger.classList.remove("is-active");
+                trigger.removeAttribute("data-count");
+                trigger.setAttribute("aria-label", "다량 검색");
+                trigger.title = "다량 검색";
                 singleInput.disabled = false;
                 return;
             }
-            trigger.textContent = `${applied.type === "customerIds" ? "고객번호" : "고객명"} ${applied.values.length}개`;
+            const typeLabel = applied.type === "customerIds" ? "고객번호" : "고객명";
             trigger.classList.add("is-active");
+            trigger.dataset.count = String(applied.values.length);
+            trigger.setAttribute("aria-label", `다량 검색: ${typeLabel} ${applied.values.length}개 적용됨`);
+            trigger.title = `${typeLabel} ${applied.values.length}개 적용됨`;
             singleInput.disabled = true;
         }
 
