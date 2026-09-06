@@ -11,6 +11,7 @@ const BOBulkCustomerSearch = (() => {
         const counter = document.getElementById("bulkCustomerValueCount");
         const error = document.getElementById("bulkCustomerSearchError");
         let applied = null;
+        let singleValueBeforeBulk = null;
 
         const selectedType = () => modal.querySelector('input[name="bulkSearchType"]:checked').value;
         const parseValues = () => Array.from(new Set(textarea.value
@@ -30,14 +31,21 @@ const BOBulkCustomerSearch = (() => {
                 trigger.classList.remove("is-active");
                 trigger.setAttribute("aria-label", "다량 검색");
                 trigger.title = "다량 검색";
-                singleInput.disabled = false;
+                singleInput.readOnly = false;
+                singleInput.removeAttribute("title");
+                if (singleValueBeforeBulk !== null) {
+                    singleInput.value = singleValueBeforeBulk;
+                    singleValueBeforeBulk = null;
+                }
                 return;
             }
             const typeLabel = applied.type === "customerIds" ? "고객번호" : "고객명";
             trigger.classList.add("is-active");
             trigger.setAttribute("aria-label", `다량 검색: ${typeLabel} ${applied.values.length}개 적용됨`);
             trigger.title = `${typeLabel} ${applied.values.length}개 적용됨`;
-            singleInput.disabled = true;
+            singleInput.value = applied.values.join(", ");
+            singleInput.title = singleInput.value;
+            singleInput.readOnly = true;
         }
 
         function close() {
@@ -82,6 +90,7 @@ const BOBulkCustomerSearch = (() => {
                 error.hidden = false;
                 return;
             }
+            if (!applied) singleValueBeforeBulk = singleInput.value;
             applied = {type: selectedType(), values};
             updateTrigger();
             close();
