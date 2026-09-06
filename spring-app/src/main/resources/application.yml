@@ -36,7 +36,7 @@ ai:
 
   model:
     version: ${AI_MODEL_VERSION:miribom-lgbm-v0.3}
-    prompt-version: ${AI_PROMPT_VERSION:v3.6}
+    prompt-version: ${AI_PROMPT_VERSION:v3.7}
 
 admin:
   batch:

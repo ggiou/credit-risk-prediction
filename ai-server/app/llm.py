@@ -226,8 +226,10 @@ class RiskExplanationClient:
         if cache_enabled:
             prompt_block["prompt_cache_breakpoint"] = {"mode": cache_mode}
 
+        # featureChangeFacts는 출력 대조 전용 기준표다. 프롬프트에 넣으면 토큰만 늘고
+        # 모델이 베껴 쓸 숫자 후보가 오히려 늘어나므로 요청 본문에서 제외한다.
         serialized_model_context = json.dumps(
-            call_input,
+            {key: value for key, value in call_input.items() if key != "featureChangeFacts"},
             ensure_ascii=False,
             allow_nan=False,
             separators=(",", ":"),
@@ -500,6 +502,55 @@ class RiskExplanationClient:
                     add_number(Decimal(str(value)) * 100)
         return allowed
 
+    # "<표시명>은 전월보다 12.34% 증가했습니다" 형태의 변화 주장을 잡는다.
+    FEATURE_CHANGE_CLAIM_RE = re.compile(
+        r"([가-힣A-Za-z0-9][가-힣A-Za-z0-9 ]*?)"
+        r"(?:은|는|이|가)?\s*전월보다\s*"
+        r"([0-9]+(?:\.[0-9]+)?)\s*%\s*"
+        r"(증가|감소)"
+    )
+
+    @classmethod
+    def _validate_feature_change_claims(
+        cls, combined: str, input_payload: dict[str, Any]
+    ) -> None:
+        """피처별 변화 주장이 백엔드 확정값과 일치하는지 대조한다.
+
+        _allowed_numbers는 입력 전체의 숫자를 한 집합으로 모으므로, 피처 A의 퍼센트를
+        피처 B 문장에 붙여도 통과한다. 실제로 잔액_현금서비스_B0M(+22.71%)이
+        "1.2% 감소"로 출력된 사례가 있어 표시명 단위로 값과 방향을 함께 검증한다.
+        """
+
+        facts = input_payload.get("featureChangeFacts") or {}
+        if not facts:
+            return
+        for raw_name, raw_percent, raw_direction in cls.FEATURE_CHANGE_CLAIM_RE.findall(combined):
+            name = raw_name.strip()
+            fact = facts.get(name)
+            while fact is None and " " in name:
+                # 앞에 붙은 수식어를 한 어절씩 떼며 표시명을 찾는다.
+                name = name.split(" ", 1)[1].strip()
+                fact = facts.get(name)
+            if fact is None:
+                continue
+            if fact.get("conflict"):
+                raise ValueError(
+                    f"feature change percentage is ambiguous for {name}; "
+                    "conflicting previous-month bases"
+                )
+            expected_percent = Decimal(str(fact["percent"]))
+            actual_percent = Decimal(raw_percent)
+            if actual_percent != expected_percent and actual_percent != expected_percent.normalize():
+                raise ValueError(
+                    f"feature change percentage mismatch for {name}: "
+                    f"stated {raw_percent}%, expected {fact['percent']}%"
+                )
+            if raw_direction != fact["direction"]:
+                raise ValueError(
+                    f"feature change direction mismatch for {name}: "
+                    f"stated {raw_direction}, expected {fact['direction']}"
+                )
+
     def _validate(self, payload: dict[str, Any], input_payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         for key in ("summary", "modelInterpretation", "changeContext"):
             if not isinstance(payload.get(key), str):
@@ -707,6 +758,8 @@ class RiskExplanationClient:
         for token in NUMBER_RE.findall(combined.replace(",", "")):
             if Decimal(token.lstrip("+")) not in allowed_numbers:
                 raise ValueError(f"LLM output contains a number not present in input: {token}")
+
+        self._validate_feature_change_claims(combined, input_payload)
 
         sentences = [re.sub(r"\s+", " ", value) for value in self._generated_sentences(payload)]
         if len(sentences) != len(set(sentences)):
