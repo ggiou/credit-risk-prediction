@@ -62,6 +62,11 @@ def get_llm() -> RiskExplanationClient | None:
     return RiskExplanationClient(
         api_key=settings.openai_api_key,
         model=settings.openai_model,
+        prompt_version=settings.prompt_version,
+        prompt_cache_enabled=settings.openai_prompt_cache_enabled,
+        prompt_cache_mode=settings.openai_prompt_cache_mode,
+        prompt_cache_ttl=settings.openai_prompt_cache_ttl,
+        prompt_cache_key_prefix=settings.openai_prompt_cache_key_prefix,
         timeout_seconds=settings.llm_timeout_seconds,
     )
 
