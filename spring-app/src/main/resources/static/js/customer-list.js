@@ -2,12 +2,19 @@
 let currentPage = 0;
 let lastPage = 0;
 let currentSort = "customerId,asc";
+let bulkSearch;
 
 document.addEventListener("DOMContentLoaded", async () => {
     try {
         await BO.loadBaseMonths(document.getElementById("baseYmSelect"));
         const query = new URLSearchParams(location.search);
         if (query.get("sort") === "topRiskPercent,asc") currentSort = "topRiskPercent,asc";
+        bulkSearch = BOBulkCustomerSearch.initialize({
+            triggerId: "customerListBulkSearchTrigger",
+            singleInputId: "customerId",
+            formId: "searchForm",
+            onBeforeSearch: () => { currentPage = 0; }
+        });
         ["customerId", "riskGrade", "analysisStatus"].forEach(id => {
             const value = query.get(id);
             if (!value) return;
@@ -28,10 +35,15 @@ async function search() {
     const params = new URLSearchParams({
         baseYm: document.getElementById("baseYmSelect").value,
         page: currentPage,
-        size: 20,
-        sort: currentSort
+        size: bulkSearch?.count() ? 50 : 20,
+        sort: currentSort,
+        analysisOrder: "COMPLETED_FIRST"
     });
-    ["customerId", "riskGrade", "analysisStatus"].forEach(id => { const value = document.getElementById(id).value.trim(); if (value) params.set(id, value); });
+    if (!bulkSearch?.appendTo(params)) {
+        const customerId = document.getElementById("customerId").value.trim();
+        if (customerId) params.set("customerId", customerId);
+    }
+    ["riskGrade", "analysisStatus"].forEach(id => { const value = document.getElementById(id).value.trim(); if (value) params.set(id, value); });
     const data = await BO.request(`/api/v1/customers?${params}`);
     lastPage = data.totalPages;
     document.getElementById("totalCount").textContent = `${BO.number(data.totalElements)}명`;

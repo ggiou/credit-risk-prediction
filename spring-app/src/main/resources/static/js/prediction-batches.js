@@ -6,11 +6,18 @@
     let currentItems = [];
     let activeBatchId = null;
     let pollTimer = null;
+    let bulkSearch;
 
     document.addEventListener("DOMContentLoaded", initialize);
 
     async function initialize() {
         bindEvents();
+        bulkSearch = BOBulkCustomerSearch.initialize({
+            triggerId: "batchBulkSearchTrigger",
+            singleInputId: "batchCustomerQuery",
+            formId: "batchSearchForm",
+            onBeforeSearch: () => { currentPage = 0; }
+        });
         try {
             const session = await BO.request("/api/v1/admin/session");
             if (session.authenticated) await showDashboard();
@@ -99,16 +106,18 @@
     }
 
     async function loadCustomers() {
+        const hasBulkSearch = bulkSearch?.count() > 0;
         const params = new URLSearchParams({
             baseYm: document.getElementById("baseYmSelect").value,
             page: String(currentPage),
-            size: "20",
-            sort: "customerId,asc"
+            size: hasBulkSearch ? "50" : "20",
+            sort: "customerId,asc",
+            analysisOrder: "ACTION_REQUIRED_FIRST"
         });
         const query = document.getElementById("batchCustomerQuery").value.trim();
         const grade = document.getElementById("batchRiskGrade").value;
         const status = document.getElementById("batchAnalysisStatus").value;
-        if (query) params.set("customerId", query);
+        if (!bulkSearch?.appendTo(params) && query) params.set("customerId", query);
         if (grade) params.set("riskGrade", grade);
         if (status) params.set("analysisStatus", status);
         const data = await BO.request(`/api/v1/customers?${params}`);

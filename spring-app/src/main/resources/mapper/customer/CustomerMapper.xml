@@ -37,6 +37,18 @@
                 OR c.display_name LIKE CONCAT('%', #{condition.customerId}, '%')
             )
         </if>
+        <if test="condition.customerIds != null and !condition.customerIds.isEmpty()">
+            AND fs.customer_id IN
+            <foreach collection="condition.customerIds" item="customerId" open="(" separator="," close=")">
+                #{customerId}
+            </foreach>
+        </if>
+        <if test="condition.customerNames != null and !condition.customerNames.isEmpty()">
+            AND c.display_name IN
+            <foreach collection="condition.customerNames" item="customerName" open="(" separator="," close=")">
+                #{customerName}
+            </foreach>
+        </if>
         <if test="condition.riskGrade != null">
             AND pr.risk_grade = #{condition.riskGrade}
         </if>
@@ -99,6 +111,30 @@
         <include refid="customerFrom"/>
         <include refid="customerWhere"/>
         ORDER BY
+        <if test="condition.analysisStatus == null and condition.analysisOrder == 'COMPLETED_FIRST'">
+            CASE
+                WHEN pr.prediction_id IS NULL THEN 3
+                WHEN pr.llm_status = 'FAILED' THEN 2
+                WHEN pr.prompt_version IS NULL OR pr.prompt_version != #{condition.promptVersion} THEN 1
+                ELSE 0
+            END ASC,
+            CASE
+                WHEN pr.prediction_id IS NOT NULL
+                    AND pr.llm_status != 'FAILED'
+                    AND pr.prompt_version = #{condition.promptVersion}
+                THEN pr.percentile
+            END ASC,
+        </if>
+        <if test="condition.analysisStatus == null and condition.analysisOrder == 'ACTION_REQUIRED_FIRST'">
+            CASE
+                WHEN pr.prediction_id IS NOT NULL
+                    AND pr.llm_status != 'FAILED'
+                    AND (pr.prompt_version IS NULL OR pr.prompt_version != #{condition.promptVersion}) THEN 0
+                WHEN pr.llm_status = 'FAILED' THEN 1
+                WHEN pr.prediction_id IS NULL THEN 2
+                ELSE 3
+            END ASC,
+        </if>
         <choose>
             <when test="condition.sortField == 'customerId'">fs.customer_id</when>
             <when test="condition.sortField == 'topRiskPercent'">pr.percentile</when>

@@ -30,7 +30,10 @@
             </div>
 
             <form id="batchSearchForm" class="filter-panel batch-filter-panel">
-                <label>고객 검색<input id="batchCustomerQuery" placeholder="고객번호 또는 고객명"></label>
+                <div class="customer-search-with-bulk">
+                    <label>고객 검색<input id="batchCustomerQuery" placeholder="고객번호 또는 고객명"></label>
+                    <button id="batchBulkSearchTrigger" class="bulk-search-trigger" type="button">+ 다량 입력</button>
+                </div>
                 <div class="base-month-picker"><label>기준년<select id="baseYearSelect" data-base-year></select></label><label>기준월<select id="baseMonthSelect" data-base-month></select></label><select id="baseYmSelect" hidden aria-hidden="true" tabindex="-1"></select></div>
                 <label>위험등급<select id="batchRiskGrade"><option value="">전체</option><option value="NORMAL">정상</option><option value="INTEREST">관심</option><option value="CAUTION">주의</option><option value="WARNING">경고</option></select></label>
                 <label>분석 상태<select id="batchAnalysisStatus"><option value="">전체</option><option value="NOT_ANALYZED">미분석</option><option value="OUTDATED">재분석 필요</option><option value="COMPLETED">완료</option><option value="PARTIAL">부분 완료</option></select></label>
@@ -57,7 +60,9 @@
         </div>
     </main>
 </div>
+<jsp:include page="../common/bulk-customer-search-modal.jsp"/>
 <script src="${pageContext.request.contextPath}/js/api.js?v=20260906-2"></script>
-<script src="${pageContext.request.contextPath}/js/prediction-batches.js?v=20260906-3"></script>
+<script src="${pageContext.request.contextPath}/js/bulk-customer-search.js?v=20260907-1"></script>
+<script src="${pageContext.request.contextPath}/js/prediction-batches.js?v=20260907-2"></script>
 </body>
 </html>
