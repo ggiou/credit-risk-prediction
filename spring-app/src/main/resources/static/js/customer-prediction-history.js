@@ -78,7 +78,7 @@ function renderCustomerHistoryTable(items) {
     table.innerHTML = items.map((item, index) => {
         const params = new URLSearchParams({baseYm: item.baseYm});
         const detailUrl = `${basePath}/${encodeURIComponent(item.customerId)}/ai-analysis?${params}`;
-        return `<tr data-history-index="${index}" tabindex="0" aria-label="${BO.escape(formatBaseMonth(item.baseYm))} AI 분석 보기"><td>${new Date(item.predictedAt).toLocaleString("ko-KR")}</td><td>${BO.escape(formatBaseMonth(item.baseYm))}</td><td>${BO.percent(item.hazard1m)}</td><td>${BO.percent(item.hazard2m)}</td><td>${BO.percent(item.hazard3m)}</td><td><span class="badge">${BO.escape(item.riskGradeName)}</span></td><td>${BO.escape(item.modelVersion)}</td><td>${BO.escape(llmStatusName(item.llmStatus))}</td><td><a class="history-detail-link" href="${BO.escape(detailUrl)}">AI 분석 보기</a></td></tr>`;
+        return `<tr data-history-index="${index}" tabindex="0" aria-label="${BO.escape(formatBaseMonth(item.baseYm))} AI 분석 보기"><td>${BO.koreanDateTime(item.predictedAt)}</td><td>${BO.escape(formatBaseMonth(item.baseYm))}</td><td>${BO.percent(item.hazard1m)}</td><td>${BO.percent(item.hazard2m)}</td><td>${BO.percent(item.hazard3m)}</td><td><span class="badge">${BO.escape(item.riskGradeName)}</span></td><td>${BO.escape(item.modelVersion)}</td><td>${BO.escape(llmStatusName(item.llmStatus))}</td><td><a class="history-detail-link" href="${BO.escape(detailUrl)}">AI 분석 보기</a></td></tr>`;
     }).join("") || '<tr><td colspan="9">예측 이력이 없습니다.</td></tr>';
 
     table.querySelectorAll("tr[data-history-index]").forEach(row => {

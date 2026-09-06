@@ -263,6 +263,13 @@ const BO = (() => {
     }
     /** 금액과 건수를 한국어 숫자 형식으로 표시한다. */
     function number(value) { return value == null ? "-" : Number(value).toLocaleString("ko-KR"); }
+    /** UTC로 전달된 실행 시각을 브라우저 설정과 무관하게 한국 시간으로 표시한다. */
+    function koreanDateTime(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "-";
+        return date.toLocaleString("ko-KR", {timeZone: "Asia/Seoul"});
+    }
     /** 오류 문구를 공통 영역과 디자인 모달에 표시한다. */
     function showError(error) {
         const serverError = Number(error?.status) >= 500;
@@ -313,5 +320,5 @@ const BO = (() => {
     /** 모델 피처 키의 화면용 이름과 단위 정보를 반환한다. */
     function modelFeatureMeta(key) { return MODEL_FEATURE_META[key]; }
     function modelFeatureLabel(key, fallback = key) { return MODEL_FEATURE_META[key]?.label || fallback || "-"; }
-    return {request, loadBaseMonths, enhanceSelects, percent, number, showError, escape, modelFeatureMeta, modelFeatureLabel};
+    return {request, loadBaseMonths, enhanceSelects, percent, number, koreanDateTime, showError, escape, modelFeatureMeta, modelFeatureLabel};
 })();
