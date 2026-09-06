@@ -14,7 +14,7 @@ const BOBulkCustomerSearch = (() => {
 
         const selectedType = () => modal.querySelector('input[name="bulkSearchType"]:checked').value;
         const parseValues = () => Array.from(new Set(textarea.value
-            .split(/[\n,]+/)
+            .split(/\r?\n|,/)
             .map(value => value.trim())
             .filter(Boolean)));
 
@@ -65,9 +65,6 @@ const BOBulkCustomerSearch = (() => {
         });
         modal.querySelectorAll('input[name="bulkSearchType"]').forEach(radio => {
             radio.addEventListener("change", () => {
-                textarea.placeholder = selectedType() === "customerIds"
-                    ? "SYN_100\nSYN_1004\nSYN_2030"
-                    : "홍길동\n김미래\n박새봄";
                 setTimeout(() => textarea.focus(), 0);
             });
         });
