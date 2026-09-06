@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 from app.main import get_model
 
@@ -15,7 +16,7 @@ def test_prediction_uses_json_model_and_preserves_legacy_percentile_field():
             "featureSnapshotId": 1,
             "featureSchemaVersion": "v1",
             "expectedModelVersion": "miribom-lgbm-v0.3",
-                "promptVersion": "v3.6",
+            "promptVersion": settings.prompt_version,
             "generateExplanation": False,
             "currentFeatures": {"연령": "40대", "Life_Stage": "4.자녀성장기(1)"},
             "previousFeatures": None,
@@ -47,7 +48,7 @@ def test_prediction_marks_no_evidence_as_skipped_without_openai_configuration():
             "previousFeatureSnapshotId": 1,
             "featureSchemaVersion": "v1",
             "expectedModelVersion": "miribom-lgbm-v0.3",
-            "promptVersion": "v3.6",
+            "promptVersion": settings.prompt_version,
             "generateExplanation": True,
             "currentFeatures": current,
             "previousFeatures": previous,
@@ -84,7 +85,7 @@ def test_llm_failure_keeps_json_model_prediction_and_counterfactual_reasons():
             "previousFeatureSnapshotId": 1,
             "featureSchemaVersion": "v1",
             "expectedModelVersion": "miribom-lgbm-v0.3",
-                "promptVersion": "v3.6",
+            "promptVersion": settings.prompt_version,
             "generateExplanation": True,
             "currentFeatures": current,
             "previousFeatures": previous,

@@ -56,7 +56,7 @@ class Settings:
             feature_schema_version=os.getenv("AI_FEATURE_SCHEMA_VERSION", "v1"),
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
-            prompt_version=os.getenv("AI_PROMPT_VERSION", "v3.6"),
+            prompt_version=os.getenv("AI_PROMPT_VERSION", "v3.7"),
             openai_prompt_cache_enabled=_read_bool("OPENAI_PROMPT_CACHE_ENABLED", True),
             openai_prompt_cache_mode=prompt_cache_mode,
             openai_prompt_cache_ttl=prompt_cache_ttl,

@@ -528,8 +528,10 @@ class ModelBundle:
             return "RATIO"
         if "여부" in feature_key:
             return "FLAG"
-        if any(token in feature_key for token in ("금액", "잔액", "한도")) or feature_key == "월중평잔":
-            return "AMOUNT"
+        # COUNT를 먼저 본다. 강제한도감액'횟수'_R12M에는 '한도'가 들어 있어
+        # AMOUNT를 먼저 판정하면 3회가 "3원"으로 표시된다.
         if any(token in feature_key for token in ("횟수", "건수", "카드수", "개월수")):
             return "COUNT"
+        if any(token in feature_key for token in ("금액", "잔액", "한도")) or feature_key == "월중평잔":
+            return "AMOUNT"
         return "VALUE"
