@@ -350,7 +350,7 @@ class RiskExplanationClient:
         payload: Any,
         input_payload: dict[str, Any],
     ) -> tuple[Any, list[str]]:
-        """확정적 모델 효과 표현만 입력 근거에 맞는 제한적 문장으로 교체한다."""
+        """고정 모델 사실과 확정적 효과 표현을 입력 근거에 맞게 정규화한다."""
 
         if not isinstance(payload, dict):
             return payload, []
@@ -376,6 +376,14 @@ class RiskExplanationClient:
                 second = f"세 기간의 위험값은 전반적으로 낮게 유지되며 관리 우선순위는 {priority}입니다."
             normalized["summary"] = f"{first} {second}"
             changed_fields.append("summary")
+        elif isinstance(summary, str):
+            prediction = input_payload["prediction"]
+            expected_rank = f"고위험 순위 기준 {prediction['topRiskPercent']:g}% 지점"
+            if prediction["grade"] not in summary or expected_rank not in summary:
+                # LLM 본문은 보존하고, 누락돼 검증 실패하는 백엔드 확정 사실만 앞에 보완한다.
+                fixed_facts = f"모델 등급은 {prediction['grade']}이며 {expected_rank}입니다."
+                normalized["summary"] = f"{fixed_facts} {summary.strip()}"
+                changed_fields.append("summary.backendFacts")
 
         interpretation = normalized.get("modelInterpretation")
         if isinstance(interpretation, str):
