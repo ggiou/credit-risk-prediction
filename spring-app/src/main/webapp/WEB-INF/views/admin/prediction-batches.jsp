@@ -32,7 +32,7 @@
             <form id="batchSearchForm" class="filter-panel batch-filter-panel">
                 <div class="customer-search-with-bulk">
                     <label>고객 검색<input id="batchCustomerQuery" placeholder="고객번호 또는 고객명"></label>
-                    <button id="batchBulkSearchTrigger" class="bulk-search-trigger" type="button">+ 다량 입력</button>
+                    <button id="batchBulkSearchTrigger" class="bulk-search-trigger" type="button" aria-label="다량 검색" title="다량 검색">+</button>
                 </div>
                 <div class="base-month-picker"><label>기준년<select id="baseYearSelect" data-base-year></select></label><label>기준월<select id="baseMonthSelect" data-base-month></select></label><select id="baseYmSelect" hidden aria-hidden="true" tabindex="-1"></select></div>
                 <label>위험등급<select id="batchRiskGrade"><option value="">전체</option><option value="NORMAL">정상</option><option value="INTEREST">관심</option><option value="CAUTION">주의</option><option value="WARNING">경고</option></select></label>
