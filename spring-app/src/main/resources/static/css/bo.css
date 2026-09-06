@@ -2183,8 +2183,9 @@ body.has-modal {
 }
 
 .customer-search-with-bulk input[readonly] {
-    background: #f8fafc;
-    color: var(--text);
+    background: #eef2f7;
+    color: var(--muted);
+    font-weight: 700;
     cursor: default;
 }
 
