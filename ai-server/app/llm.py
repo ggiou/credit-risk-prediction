@@ -26,41 +26,46 @@ SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드
 - 연체 확률 퍼센트로 언급할 수 있는 값은 monthlyHazards뿐이다. topRiskPercent는 확률이 아니라 비교군 내 고위험 순위 기준 위치로만 표현한다.
 - topRiskPercent는 고위험 순위 기준 위치를 뜻하며 값이 작을수록 비교군 내 위험 우선순위가 높다. '위험 상위 N%'라고 쓰지 않고 '고위험 순위 기준 N% 지점'이라고 쓴다.
 - grade는 모델이 3개월 종합 분류 기준으로 확정한 결과다. 이를 변경하거나 재평가하지 않는다.
-- modelDirection은 현재 값이 해당 고객의 모델 점수에 기여한 방향이다. 전월 대비 값이 증가하거나 감소한 방향과 다르다.
-- modelDirection은 c3 원점수의 현재 결과와 반사실 재채점 결과 차이로 백엔드가 확정한 방향이다. 표시상 고위험 순위가 같아도 modelDirection을 변경하거나 중립으로 해석하지 않는다.
+- 입력의 modelDirection은 현재 결과와 반사실 재채점 결과의 모델 원점수 차이로 백엔드가 확정한 방향이다. 화면 문장에서는 이 필드명을 쓰지 않고 '모델의 국소 재채점에서 위험 증가/감소 방향으로 나타났습니다.'라고 풀어 쓴다.
+- 표시상 고위험 순위가 같아도 백엔드가 제공한 모델의 국소 재채점 방향을 변경하거나 중립으로 해석하지 않는다.
 - reasonMethod가 LOCAL_SHAP이면 고객별 모델 기여 근거다.
 - reasonMethod가 PREVIOUS_VALUE_COUNTERFACTUAL이면 현재값을 전월값으로 되돌려 재채점했을 때의 모델 변화다. 이를 SHAP이나 확정 원인이라고 부르지 않는다.
 - observedChanges는 백엔드가 계산한 사실이다. 수치를 다시 계산하지 않는다.
 - 모델 근거에 currentValueDisplay, previousValueDisplay, changeValueDisplay, changeRateDisplay가 있으면 원시값을 환산하지 말고 해당 표시값을 그대로 사용한다.
-- indicatorCandidates의 title, fact, modelRelation, reasonIds, signalIds, featureKeys는 백엔드가 검증한 카드 후보다. 이 값들을 수정하거나 새로 계산하지 않고 원칙적으로 2~4개를 선택하며, 유효 후보가 하나뿐이면 1개를 선택한다. interpretation만 작성한다.
+- indicatorCandidates의 title, fact, modelRelation, reasonIds, signalIds, featureKeys는 백엔드가 검증한 카드 후보다. 이 값들을 수정하거나 새로 계산하지 않고 원칙적으로 2~4개를 선택하며, 유효 후보가 하나뿐이면 1개를 선택한다. interpretation만 작성한다. detail은 화면의 상세 보기에서 백엔드가 붙이는 값이므로 다른 문장에 복사하지 않는다.
 - managementPriority와 generationMode는 백엔드가 등급과 호출 방식에 따라 결정한 값이다. 그대로 반환한다. summary에는 managementPriorityDisplay를 그대로 사용한다.
 
 [필드별 역할]
 1. summary는 최종 등급, 고위험 순위 기준 위치, 관리 우선순위를 1~2문장으로 요약한다. 순위는 '고위험 순위 기준 N% 지점이며, 수치가 작을수록 비교군 내 위험 우선순위가 높습니다.'라고 설명한다. horizonEmphasis가 PEAK일 때만 위험이 가장 큰 월을 언급하고, LOW_STABLE이면 세 기간 모두 위험값이 낮게 유지된다고 설명한다.
-2. modelInterpretation은 LightGBM이 포착한 상위 근거와 modelDirection을 2~3문장으로 종합한다. 반사실 순위의 구체적인 숫자와 문장은 keyIndicators.fact에서만 보여주고, modelInterpretation에 counterfactualComparisonStatement를 그대로 복사하지 않는다.
+2. modelInterpretation은 모델이 우선 포착한 근거와 모델의 국소 재채점 방향을 2~3문장으로 종합한다. 화면 제목과 상단 안내에 모델 종류가 이미 표시되므로 이 필드에서는 'LightGBM'이라는 명칭을 직접 쓰지 않는다. 실제 관찰값의 기간별 흐름은 쓰지 않는다. 반사실 순위의 구체적인 숫자와 문장은 화면의 keyIndicators.detail에서만 보여주므로 modelInterpretation에 counterfactualComparisonStatement를 그대로 복사하지 않는다.
 3. keyIndicators는 indicatorCandidates에서 서로 다른 핵심 후보를 원칙적으로 2~4개 선택한다. 유효 후보가 하나뿐이면 1개만 선택한다. title, fact, modelRelation과 모든 참조 배열은 후보와 똑같이 복사하고 interpretation만 한 문장으로 작성한다.
-4. changeContext는 keyIndicators의 구체적인 숫자를 반복하지 않고, 지표들을 함께 봤을 때의 기간별·방향별 흐름을 1~2문장으로 종합한다. 유의미한 종합 맥락이 없으면 빈 문자열로 둔다.
-5. reviewPoints는 allowedReviewChecks에서 모델 근거와 직접 연결된 항목만 선택한다. 정상 등급은 추가 확인 필요성이 있을 때만 0~1개, 관심·주의·경고 등급은 1~2개로 제한한다.
+4. changeContext는 실제 관찰값만 종합해 기간별·방향별 흐름을 1~2문장으로 설명한다. 모델의 국소 재채점 방향이나 modelInterpretation의 결론을 반복하지 않는다. 유의미한 종합 맥락이 없으면 빈 문자열로 둔다.
+5. reviewPoints는 allowedReviewChecks에서 모델 근거와 직접 연결된 항목만 선택하고 아래 개수 기준을 지킨다.
 6. usedReasonIds, usedSignalIds, usedFeatureKeys는 선택한 keyIndicators와 reviewPoints에서 실제 참조한 값만 반환한다. 최종 합집합과 순서는 백엔드가 결정적으로 정규화한다.
 
+[담당자 확인 항목 개수]
+- 정상 등급: 0~1개
+- 관심·주의·경고 등급: 1~2개
+
 [표현 규칙]
-- 모델 근거가 확인된 경우 단정적으로 '모델은 ○○ 패턴을 주요 위험 근거로 포착했습니다.'라고 쓴다.
+- 위험 증가 방향 근거가 확인된 경우 '○○ 패턴이 모델의 주요 위험 근거로 포착되었습니다.'라고 쓴다. 선택된 근거가 모두 위험 감소 방향이면 '위험 신호', '위험 근거', '선행 신호'라고 부르지 않고 '선택된 패턴은 모델의 국소 재채점에서 위험 감소 방향의 비교 근거로 나타났습니다.'라고 쓴다.
 - 데이터에서 직접 확인되는 변화는 '관찰되었습니다.'라고 쓴다.
 - 확인이 필요한 상태는 '○○ 여부를 우선 확인할 필요가 있습니다.'라고 쓴다.
-- 현재 연체 지표가 0이어도 미래 연체 위험 예측을 부정하지 않는다. 필요하면 '현재 확인된 연체와 별개로 모델이 선행 신호를 포착함'이라고 설명한다.
+- 현재 연체 지표가 0이어도 미래 연체 위험 예측을 부정하지 않는다. 위험 증가 방향 근거가 있을 때만 '현재 확인된 연체와 별개로 모델이 선행 신호를 포착했습니다.'라고 설명하며, 모든 근거가 위험 감소 방향이면 선행 신호라고 부르지 않는다.
 - 당월 지표와 R3M·R6M·R12M 값의 방향이 다르면 '기간별로 다른 흐름이 관찰됨'이라고 설명하고 각각의 집계 기간을 정확히 쓴다.
 - hazard가 가장 높은 월을 실제 값에서 찾는다. 입력값이 감소하는데 '시간이 지날수록 위험이 상승한다'고 쓰지 않는다.
 - 숫자, 단위, 증감률은 입력에 있는 값만 사용한다.
 - 원시 feature key보다 displayName을 사용한다.
 - B2B 관리자 화면에 표시되는 설명이므로 모든 문장은 자연스러운 존댓말인 '~입니다.', '~합니다.', '~되었습니다.' 형태로 작성한다. '~임', '~함', '~됨', '~나타남' 같은 명사형 종결은 사용하지 않는다.
 - modelInterpretation에서는 상위 지표들의 위험 증가·감소 방향을 한 문단에서 종합하고, 모델이 상대적으로 우선 포착한 패턴을 설명한다. 등급과 월별 위험률을 다시 나열해 이 내용을 대체하지 않는다.
-- keyIndicators.fact는 관찰된 수치 변화와 반사실 재채점의 순위 이동만 담은 객관적 사실이다. fact에 없는 위험 방향 결론, 등급 유지 여부, 담당자 행동 또는 금융 인과관계를 fact처럼 반복하지 않는다.
+- keyIndicators.fact는 화면에 바로 표시할 증감률 중심의 간결한 관찰 사실이다. 원 단위 전월·현재 값과 반사실 순위 이동은 indicatorCandidates.detail의 화면 상세 정보이므로 fact나 interpretation에 반복하지 않는다. fact에 없는 위험 방향 결론, 등급 유지 여부, 담당자 행동 또는 금융 인과관계를 fact처럼 반복하지 않는다.
 - keyIndicators.interpretation에서는 관찰된 증감과 modelDirection을 구분한다. 두 방향이 어긋나면 '관찰된 변화'와 '모델의 국소 재채점 반응'을 별도 문장으로 설명하고, 다른 피처와의 조합에서 나타난 모델 반응으로 제한하여 해석한다.
-- LightGBM의 모델 방향과 실제 기간별 관찰 흐름은 서로 다른 문장으로 설명한다. 모델 방향이 위험 감소이면서 당월과 최근 3개월의 관찰 흐름은 혼재될 수 있으므로, 기간별 지표가 엇갈리면 관찰 흐름을 '혼재'라고 명시한다.
+- 관찰값의 증가·감소 방향과 모델의 국소 재채점 위험 방향이 어긋나면 반드시 '다른 피처와의 조합에서 나타난 반응으로 제한하여 해석할 필요가 있습니다.'라는 취지의 제한적 해석을 포함한다.
+- 모델의 국소 재채점 방향과 실제 기간별 관찰 흐름은 서로 다른 문장으로 설명한다. 모델 방향이 위험 감소이면서 당월과 최근 3개월의 관찰 흐름은 혼재될 수 있으므로, 기간별 지표가 엇갈리면 관찰 흐름을 '혼재'라고 명시한다.
 - counterfactualComparisonStatement에 '표시상 고위험 순위는 N%로 동일했습니다.'가 있으면 0%p 이동이라고 바꾸지 않는다. 이때 interpretation은 표시상 순위 차이가 없다는 사실과 내부 modelDirection을 구분한다.
 - 관찰 방향과 모델 방향이 일치하더라도 인과관계나 위험 완화를 확정하지 않는다. counterfactualGradeChanged가 false이면 해당 근거가 등급을 변경할 정도의 차이는 아니었다고 설명할 수 있다.
 - 반사실 재채점 방식, SHAP이 아니라는 점, 실제 원인을 확정하지 않는다는 안내는 화면의 모델 근거 영역에 고정 표시된다. summary, modelInterpretation, changeContext에서 해당 면책 문구를 생성하거나 반복하지 않는다.
-- 구체적인 금액, 비율, 증감률은 keyIndicators.fact와 counterfactualComparisonStatement에 제공된 값만 사용한다. 수치를 새로 계산하지 않는다.
+- 구체적인 증감률은 keyIndicators.fact에 제공된 값만 사용한다. 원 단위 금액과 반사실 순위 수치는 화면의 keyIndicators.detail에서만 표시하며 LLM 문장에 복사하지 않는다. 수치를 새로 계산하지 않는다.
 - 같은 사실이나 문장을 summary, modelInterpretation, keyIndicators, changeContext에서 반복하지 않는다.
 - 여신관리 담당자가 바로 검토할 수 있도록 간결하면서도 분석적인 한국어를 사용한다. 전문성은 모델 근거, 집계 기간, 변화 방향을 정확히 구분하는 방식으로 드러내며 과장된 금융 용어나 추정으로 꾸미지 않는다.
 
@@ -72,6 +77,8 @@ SYSTEM_RULES = """당신은 카드사의 연체 위험 조기경보 대시보드
 - 모델 기여 방향과 금융 상식이 다르더라도 인과관계를 새로 만들어 모델을 정당화하지 않는다. 합성데이터 모델에는 비단조 관계가 있을 수 있다.
 - 리볼빙 전환, 대출, 한도 증액과 같은 상품을 권유하지 않는다.
 - contribution 로그오즈 값을 화면용 문장에 쓰지 않는다.
+- modelDirection, counterfactualRiskDirection, c3 같은 내부 필드명을 화면 문장에 직접 쓰지 않는다. 각각 '모델의 국소 재채점 방향', '현재 상태와 전월값 대체 시나리오의 위험 방향 비교', '모델 원점수'처럼 자연스러운 한국어로 풀어 쓴다.
+- modelInterpretation에는 'LightGBM'이라는 명칭을 직접 출력하지 않는다. 모델 종류는 화면 상단 안내에서만 표시한다.
 - '위험 상위 N%'처럼 순위가 확률이나 위험 고객 비율로 오해될 수 있는 표현을 사용하지 않는다.
 - c3 또는 cumulativeRisk3m을 확률 퍼센트로 출력하지 않는다.
 - horizon 자체를 고객 위험 사유로 사용하지 않는다.
@@ -156,6 +163,13 @@ MANAGEMENT_PRIORITY_PATTERNS = {
     "PRIORITY_REVIEW": r"우선\s*검토",
     "URGENT_REVIEW": r"긴급\s*검토",
 }
+INTERNAL_FIELD_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:modelDirection|counterfactualRiskDirection|c3|cumulativeRisk3m)(?![A-Za-z0-9_])",
+    re.I,
+)
+CONFIRMED_RISK_EFFECT_RE = re.compile(
+    r"위험\s*(?:완화|감소|증가).{0,8}(?:확인|확정)(?:되|됐|됨|된|했|하였)"
+)
 
 
 @dataclass(frozen=True)
@@ -207,6 +221,102 @@ class RiskExplanationClient:
                 sentence for sentence in sentences
                 if re.sub(r"\s+", " ", sentence) not in fact_sentences
             ).strip()
+
+    @classmethod
+    def _normalize_confirmed_risk_effect(
+        cls,
+        payload: Any,
+        input_payload: dict[str, Any],
+    ) -> tuple[Any, list[str]]:
+        """확정적 모델 효과 표현만 입력 근거에 맞는 제한적 문장으로 교체한다."""
+
+        if not isinstance(payload, dict):
+            return payload, []
+        normalized = copy.deepcopy(payload)
+        changed_fields: list[str] = []
+        reasons = {reason["reasonId"]: reason for reason in input_payload.get("modelReasons", [])}
+
+        summary = normalized.get("summary")
+        if isinstance(summary, str) and CONFIRMED_RISK_EFFECT_RE.search(summary):
+            prediction = input_payload["prediction"]
+            priority = MANAGEMENT_PRIORITY_LABELS[input_payload["managementPriority"]]
+            top_risk_percent = f"{prediction['topRiskPercent']:g}"
+            first = (
+                f"모델 등급은 {prediction['grade']}이며 고위험 순위 기준 {top_risk_percent}% 지점으로, "
+                "수치가 작을수록 비교군 내 위험 우선순위가 높습니다."
+            )
+            if prediction["horizonEmphasis"] == "PEAK":
+                second = (
+                    f"{prediction['peakHorizonMonth']}개월 구간의 위험값이 가장 높으며 "
+                    f"관리 우선순위는 {priority}입니다."
+                )
+            else:
+                second = f"세 기간의 위험값은 전반적으로 낮게 유지되며 관리 우선순위는 {priority}입니다."
+            normalized["summary"] = f"{first} {second}"
+            changed_fields.append("summary")
+
+        interpretation = normalized.get("modelInterpretation")
+        if isinstance(interpretation, str):
+            model_name_normalized = re.sub(
+                r"(?<![A-Za-z])LightGBM\s*(?:모델)?",
+                "모델",
+                interpretation,
+                flags=re.IGNORECASE,
+            )
+            if model_name_normalized != interpretation:
+                normalized["modelInterpretation"] = model_name_normalized
+                interpretation = model_name_normalized
+                changed_fields.append("modelInterpretation.modelName")
+        if isinstance(interpretation, str) and CONFIRMED_RISK_EFFECT_RE.search(interpretation):
+            directions = {reason.get("modelDirection") for reason in reasons.values()}
+            if directions == {"DECREASE_RISK"}:
+                replacement = "선택된 근거는 모델의 국소 재채점에서 모두 위험 감소 방향의 비교 근거로 나타났습니다."
+            elif directions == {"INCREASE_RISK"}:
+                replacement = "선택된 근거는 모델의 국소 재채점에서 모두 위험 증가 방향의 비교 근거로 나타났습니다."
+            else:
+                replacement = "선택된 근거는 모델의 국소 재채점에서 위험 증가와 감소 방향이 함께 나타났습니다."
+            normalized["modelInterpretation"] = replacement
+            changed_fields.append("modelInterpretation")
+
+        change_context = normalized.get("changeContext")
+        if isinstance(change_context, str) and CONFIRMED_RISK_EFFECT_RE.search(change_context):
+            normalized["changeContext"] = ""
+            changed_fields.append("changeContext")
+
+        indicators = normalized.get("keyIndicators")
+        if isinstance(indicators, list):
+            for index, indicator in enumerate(indicators):
+                if not isinstance(indicator, dict):
+                    continue
+                value = indicator.get("interpretation")
+                if not isinstance(value, str) or not CONFIRMED_RISK_EFFECT_RE.search(value):
+                    continue
+                linked_reasons = [
+                    reasons[reason_id] for reason_id in indicator.get("reasonIds", [])
+                    if reason_id in reasons
+                ]
+                divergent = any(
+                    (reason.get("direction") == "INCREASE" and reason.get("modelDirection") == "DECREASE_RISK")
+                    or (reason.get("direction") == "DECREASE" and reason.get("modelDirection") == "INCREASE_RISK")
+                    for reason in linked_reasons
+                )
+                if divergent:
+                    replacement = (
+                        "관찰된 변화와 모델의 국소 재채점 방향이 다르므로, 다른 피처와의 조합에서 "
+                        "나타난 반응으로 제한하여 해석할 필요가 있습니다."
+                    )
+                else:
+                    relation = indicator.get("modelRelation")
+                    replacement = {
+                        "RISK_INCREASE": "이 지표는 모델의 국소 재채점에서 위험 증가 방향의 비교 근거로 나타났습니다.",
+                        "RISK_DECREASE": "이 지표는 모델의 국소 재채점에서 위험 감소 방향의 비교 근거로 나타났습니다.",
+                        "MIXED": "이 지표와 연결된 모델 근거에서는 위험 증가와 감소 방향이 함께 나타났습니다.",
+                        "CONTEXT": "이 지표는 모델 판단을 이해하기 위한 관찰 맥락입니다.",
+                    }.get(relation, "이 지표는 모델의 국소 재채점 결과를 이해하기 위한 비교 근거입니다.")
+                indicator["interpretation"] = replacement
+                changed_fields.append(f"keyIndicators[{index}].interpretation")
+
+        return normalized, changed_fields
 
     @staticmethod
     def _allowed_numbers(input_payload: dict[str, Any]) -> set[Decimal]:
@@ -396,24 +506,33 @@ class RiskExplanationClient:
             payload["summary"], payload["modelInterpretation"], payload["changeContext"],
             *(indicator["interpretation"] for indicator in indicators),
         ]
+        generated_narrative_text = " ".join(generated_narratives)
+        reason_interpretation_text = " ".join([
+            payload["modelInterpretation"],
+            *(indicator["interpretation"] for indicator in indicators),
+        ])
         for narrative in generated_narratives:
             for sentence in re.split(r"(?<=[.!?])\s+", narrative):
                 if sentence.strip() and not re.search(r"(?:니|습니)다[.!?]$", sentence.strip()):
                     raise ValueError("LLM narrative sentences must use polite Korean endings")
         if any(term in combined for term in FORBIDDEN_TERMS):
             raise ValueError("LLM output contains an unsupported circumstance or product recommendation")
+        if INTERNAL_FIELD_RE.search(combined):
+            raise ValueError("LLM output exposes an internal field name")
+        if re.search(r"(?:모델|재채점|반사실|위험\s*(?:증가|감소|완화)\s*방향)", payload["changeContext"]):
+            raise ValueError("changeContext must contain observed changes only")
         if sum(combined.count(term) for term in ("판단할 수 없음", "분류할 수 없음", "알 수 없음")) > 1:
             raise ValueError("LLM output repeats non-actionable uncertainty phrases")
         if combined.count("위험 점수를 높이는 방향으로 반영") > 1:
             raise ValueError("LLM output repeats model-direction boilerplate")
-        if re.search(r"위험\s*(?:완화|감소|증가).{0,8}(?:확인|확정)", combined):
+        if CONFIRMED_RISK_EFFECT_RE.search(generated_narrative_text):
             raise ValueError("local model response must not be presented as a confirmed risk effect")
         if re.search(r"(?:c3|cumulative\s*risk|cumulativeRisk3m|누적\s*위험).{0,20}%", combined, re.I):
             raise ValueError("c3/cumulative risk must not be exposed as a percentage")
         if re.search(r"horizon.{0,20}(?:원인|근거|요인)", combined, re.I):
             raise ValueError("horizon must not be used as a customer risk reason")
         if all(reason.get("modelDirection") == "DECREASE_RISK" for reason in reasons.values()) and re.search(
-            r"(?:주요\s*)?위험\s*(?:신호|근거|요인|증가\s*방향)|선행\s*신호", combined
+            r"(?:주요\s*)?위험\s*(?:신호|근거|요인|증가\s*방향)|선행\s*신호", reason_interpretation_text
         ):
             raise ValueError("decrease-only reasons must be described as risk-mitigating patterns")
         if grade == "정상" and any(term in combined for term in (
@@ -421,6 +540,18 @@ class RiskExplanationClient:
             "상환 부담이 지속될 것으로 보입니다",
         )):
             raise ValueError("normal-grade output contains an unnecessary risk warning")
+        for indicator in indicators:
+            linked_reasons = [reasons[reason_id] for reason_id in indicator.get("reasonIds", [])]
+            divergent = any(
+                (reason.get("direction") == "INCREASE" and reason.get("modelDirection") == "DECREASE_RISK")
+                or (reason.get("direction") == "DECREASE" and reason.get("modelDirection") == "INCREASE_RISK")
+                for reason in linked_reasons
+            )
+            if divergent and not (
+                "다른 피처와의 조합" in indicator["interpretation"]
+                and re.search(r"제한.{0,8}해석", indicator["interpretation"])
+            ):
+                raise ValueError("divergent observed and model directions require a limited interpretation")
         if re.search(
             r"(?:SHAP|확정(?:적|된)?\s*(?:연체\s*)?원인|실제\s*연체\s*원인).{0,40}(?:아니|아닌|아닙|의미하지|확정하지)",
             combined,
@@ -471,8 +602,13 @@ class RiskExplanationClient:
         normalized = copy.deepcopy(payload)
         for key in ("summary", "modelInterpretation", "changeContext"):
             normalized[key] = normalized[key].strip()
+        candidate_by_fact = {
+            candidate["fact"]: candidate for candidate in input_payload["indicatorCandidates"]
+        }
         for indicator in normalized["keyIndicators"]:
             indicator["interpretation"] = indicator["interpretation"].strip()
+            # 원 단위 변화와 반사실 순위는 LLM이 작성하지 않고 검증된 후보에서 붙인다.
+            indicator["detail"] = str(candidate_by_fact[indicator["fact"]].get("detail", "")).strip()
         paragraphs = [normalized["summary"]]
         indicator_lines = ["주요 관찰 지표"]
         for indicator in normalized["keyIndicators"]:
@@ -495,15 +631,28 @@ class RiskExplanationClient:
     ) -> LlmResult:
         if not input_payload["modelReasons"] or not input_payload["indicatorCandidates"]:
             LOGGER.warning(
-                "LLM explanation skipped: no counterfactual evidence requestId=%s customerId=%s baseYm=%s",
+                "LLM explanation skipped: no usable counterfactual evidence requestId=%s customerId=%s baseYm=%s",
                 request_id,
                 customer_id,
                 base_ym,
             )
-            return LlmResult("FAILED", None, None, [], [], "PREVIOUS_VALUE_COUNTERFACTUAL 근거를 생성할 전월 변화가 없습니다.")
+            return LlmResult(
+                "FAILED",
+                None,
+                None,
+                [],
+                [],
+                "전월 비교로 유효한 PREVIOUS_VALUE_COUNTERFACTUAL 근거를 생성하지 못했습니다.",
+            )
 
         schema = copy.deepcopy(OUTPUT_SCHEMA)
         schema["properties"]["reviewPoints"]["items"]["properties"]["text"]["enum"] = input_payload["allowedReviewChecks"]
+        if input_payload["prediction"]["grade"] == "정상":
+            schema["properties"]["reviewPoints"]["minItems"] = 0
+            schema["properties"]["reviewPoints"]["maxItems"] = 1
+        else:
+            schema["properties"]["reviewPoints"]["minItems"] = 1
+            schema["properties"]["reviewPoints"]["maxItems"] = 2
         schema["properties"]["keyIndicators"]["minItems"] = min(2, len(input_payload["indicatorCandidates"]))
         schema["properties"]["keyIndicators"]["maxItems"] = min(4, len(input_payload["indicatorCandidates"]))
         indicator_properties = schema["properties"]["keyIndicators"]["items"]["properties"]
@@ -547,6 +696,15 @@ class RiskExplanationClient:
 
             try:
                 parsed = json.loads(response.output_text)
+                parsed, normalized_fields = self._normalize_confirmed_risk_effect(parsed, input_payload)
+                if normalized_fields:
+                    LOGGER.info(
+                        "LLM confirmed-risk wording normalized without retry requestId=%s customerId=%s baseYm=%s fields=%s",
+                        request_id,
+                        customer_id,
+                        base_ym,
+                        ",".join(normalized_fields),
+                    )
                 explanation, structured = self._validate(parsed, input_payload)
                 return LlmResult("COMPLETED", explanation, structured, structured["reviewPoints"], structured["usedFeatureKeys"], None)
             except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
@@ -562,6 +720,14 @@ class RiskExplanationClient:
                     str(exc)[:500],
                 )
                 if attempt == 0:
-                    call_input = {**input_payload, "correction": f"이전 응답 검증 오류: {str(exc)[:300]}. 이 오류만 교정해 스키마대로 다시 작성하세요."}
+                    correction = str(exc)[:300]
+                    if correction == "decrease-only reasons must be described as risk-mitigating patterns":
+                        correction = (
+                            "입력의 모델 근거가 모두 위험 감소 방향입니다. summary, modelInterpretation, changeContext와 "
+                            "keyIndicators.interpretation에서 이를 위험 신호·위험 근거·위험 요인·선행 신호 또는 "
+                            "위험 증가 방향이라고 표현하지 마세요. 모델의 국소 재채점에서 위험 감소 방향의 "
+                            "비교 근거로 나타났다고 작성하세요."
+                        )
+                    call_input = {**input_payload, "correction": f"이전 응답 검증 오류: {correction} 이 오류만 교정해 스키마대로 다시 작성하세요."}
 
         return LlmResult("FAILED", None, None, [], [], str(last_error)[:500] if last_error else "unknown LLM error")

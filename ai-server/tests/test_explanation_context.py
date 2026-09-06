@@ -1,4 +1,9 @@
-from app.explanation_context import build_llm_input, build_observed_changes, horizon_pattern
+from app.explanation_context import (
+    _indicator_candidates,
+    build_llm_input,
+    build_observed_changes,
+    horizon_pattern,
+)
 from app.model_bundle import ModelPrediction
 
 
@@ -6,7 +11,7 @@ def test_peak_horizon_and_front_loaded_pattern_follow_actual_hazards():
     prediction = ModelPrediction(0.02786, 0.01332, 0.00733, 0.0476, "INTEREST", 0.33)
     payload = build_llm_input(
         model_version="miribom-lgbm-v0.3",
-        prompt_version="v3.2",
+        prompt_version="v3.3",
         prediction=prediction,
         reasons=[],
         current={},
@@ -70,7 +75,7 @@ def test_ratio_reason_contains_backend_formatted_percent_values():
 
     payload = build_llm_input(
         model_version="miribom-lgbm-v0.3",
-        prompt_version="v3.2",
+        prompt_version="v3.3",
         prediction=prediction,
         reasons=[reason],
         current={},
@@ -89,7 +94,7 @@ def test_low_normal_hazards_use_stable_horizon_message_contract():
 
     payload = build_llm_input(
         model_version="miribom-lgbm-v0.3",
-        prompt_version="v3.2",
+        prompt_version="v3.3",
         prediction=prediction,
         reasons=[],
         current={},
@@ -126,7 +131,7 @@ def test_indicator_candidate_uses_backend_fact_and_counterfactual_rank_differenc
 
     payload = build_llm_input(
         model_version="miribom-lgbm-v0.3",
-        prompt_version="v3.2",
+        prompt_version="v3.3",
         prediction=prediction,
         reasons=[reason],
         current={"잔액_B0M": 99},
@@ -136,8 +141,9 @@ def test_indicator_candidate_uses_backend_fact_and_counterfactual_rank_differenc
     candidate = payload["indicatorCandidates"][0]
     assert candidate["title"] == "잔액 부담 흐름"
     assert candidate["modelRelation"] == "RISK_DECREASE"
-    assert candidate["fact"] == (
-        "당월 총 카드 잔액은 전월보다 1% 감소했습니다. "
+    assert candidate["fact"] == "당월 총 카드 잔액은 전월보다 1% 감소했습니다."
+    assert candidate["detail"] == (
+        "당월 총 카드 잔액은 전월 100원에서 현재 99원으로 1원 감소했습니다. "
         "당월 총 카드 잔액을 전월값으로 대체한 재채점에서는 고위험 순위가 "
         "현재 81.4%에서 80.6%로 0.8%p 이동했습니다."
     )
@@ -159,11 +165,11 @@ def test_counterfactual_rank_uses_one_decimal_display_difference():
     }
 
     payload = build_llm_input(
-        model_version="miribom-lgbm-v0.3", prompt_version="v3.2", prediction=prediction,
+        model_version="miribom-lgbm-v0.3", prompt_version="v3.3", prediction=prediction,
         reasons=[reason], current={"잔액_B0M": 99}, previous={"잔액_B0M": 100},
     )
 
-    assert "현재 81.4%에서 81.0%로 0.4%p 이동했습니다." in payload["indicatorCandidates"][0]["fact"]
+    assert "현재 81.4%에서 81.0%로 0.4%p 이동했습니다." in payload["indicatorCandidates"][0]["detail"]
 
 
 def test_equal_display_rank_does_not_change_raw_model_direction():
@@ -179,14 +185,14 @@ def test_equal_display_rank_does_not_change_raw_model_direction():
     }
 
     payload = build_llm_input(
-        model_version="miribom-lgbm-v0.3", prompt_version="v3.2", prediction=prediction,
+        model_version="miribom-lgbm-v0.3", prompt_version="v3.3", prediction=prediction,
         reasons=[reason], current={"청구금액_B0": 90440}, previous={"청구금액_B0": 100000},
     )
 
     assert payload["modelReasons"][0]["modelDirection"] == "DECREASE_RISK"
     assert payload["indicatorCandidates"][0]["modelRelation"] == "RISK_DECREASE"
-    assert "표시상 고위험 순위는 81.4%로 동일했습니다." in payload["indicatorCandidates"][0]["fact"]
-    assert "0.0%p" not in payload["indicatorCandidates"][0]["fact"]
+    assert "표시상 고위험 순위는 81.4%로 동일했습니다." in payload["indicatorCandidates"][0]["detail"]
+    assert "0.0%p" not in payload["indicatorCandidates"][0]["detail"]
 
 
 def test_caution_customer_groups_increase_and_decrease_reasons_as_mixed_pattern():
@@ -211,7 +217,7 @@ def test_caution_customer_groups_increase_and_decrease_reasons_as_mixed_pattern(
     ]
 
     payload = build_llm_input(
-        model_version="miribom-lgbm-v0.3", prompt_version="v3.2", prediction=prediction,
+        model_version="miribom-lgbm-v0.3", prompt_version="v3.3", prediction=prediction,
         reasons=reasons, current={"잔액_B0M": 120, "월중평잔": 95},
         previous={"잔액_B0M": 100, "월중평잔": 100},
     )
@@ -221,6 +227,45 @@ def test_caution_customer_groups_increase_and_decrease_reasons_as_mixed_pattern(
     assert grouped["modelRelation"] == "MIXED"
     assert grouped["reasonIds"] == ["R1", "R2"]
     assert payload["managementPriority"] == "PRIORITY_REVIEW"
+
+
+def test_same_pattern_reasons_with_same_rank_movement_use_one_grouped_sentence():
+    prediction = ModelPrediction(0.001, 0.0005, 0.0002, 0.0017, "NORMAL", 82.2)
+    reasons = [
+        {
+            "reasonId": "R1", "featureKey": "잔액_B0M", "displayName": "당월 총 카드 잔액",
+            "unit": "AMOUNT", "currentValue": 99, "previousValue": 100,
+            "changeValue": -1, "changeRate": -0.01, "direction": "DECREASE",
+            "modelDirection": "DECREASE_RISK", "currentTopRiskPercent": 82.2,
+            "counterfactualTopRiskPercent": 82.1, "topRiskPercentDifference": 0.1,
+            "counterfactualRiskDirection": "CURRENT_LESS_RISKY", "counterfactualGrade": "정상",
+            "counterfactualGradeChanged": False, "evidenceFeatureKeys": ["잔액_B0M", "f_사용률"],
+            "patternCode": "BALANCE_EXPOSURE",
+        },
+        {
+            "reasonId": "R2", "featureKey": "잔액_할부_B0M", "displayName": "기준월 할부 잔액",
+            "unit": "AMOUNT", "currentValue": 40, "previousValue": 50,
+            "changeValue": -10, "changeRate": -0.2, "direction": "DECREASE",
+            "modelDirection": "DECREASE_RISK", "currentTopRiskPercent": 82.2,
+            "counterfactualTopRiskPercent": 82.1, "topRiskPercentDifference": 0.1,
+            "counterfactualRiskDirection": "CURRENT_LESS_RISKY", "counterfactualGrade": "정상",
+            "counterfactualGradeChanged": False, "evidenceFeatureKeys": ["잔액_할부_B0M"],
+            "patternCode": "BALANCE_EXPOSURE",
+        },
+    ]
+
+    payload = build_llm_input(
+        model_version="miribom-lgbm-v0.3", prompt_version="v3.3", prediction=prediction,
+        reasons=reasons, current={"잔액_B0M": 99, "잔액_할부_B0M": 40},
+        previous={"잔액_B0M": 100, "잔액_할부_B0M": 50},
+    )
+
+    detail = payload["indicatorCandidates"][0]["detail"]
+    assert (
+        "당월 총 카드 잔액과 기준월 할부 잔액을 각각 전월값으로 대체한 재채점에서는 "
+        "고위험 순위가 모두 현재 82.2%에서 82.1%로 0.1%p 이동했습니다."
+    ) in detail
+    assert detail.count("전월값으로 대체한 재채점") == 1
 
 
 def test_billing_increase_and_model_decrease_are_separated_as_objective_facts():
@@ -236,7 +281,7 @@ def test_billing_increase_and_model_decrease_are_separated_as_objective_facts():
         "patternCode": "BILLING_PRESSURE",
     }
     payload = build_llm_input(
-        model_version="miribom-lgbm-v0.3", prompt_version="v3.2", prediction=prediction,
+        model_version="miribom-lgbm-v0.3", prompt_version="v3.3", prediction=prediction,
         reasons=[reason], current={"청구금액_B0": 100130, "청구금액_R3M": 96000},
         previous={"청구금액_B0": 100000, "청구금액_R3M": 100000},
     )
@@ -244,11 +289,14 @@ def test_billing_increase_and_model_decrease_are_separated_as_objective_facts():
     candidate = payload["indicatorCandidates"][0]
     assert candidate["modelRelation"] == "MIXED"
     assert candidate["fact"] == (
-        "당월 청구금액은 전월보다 0.13% 증가했지만 최근 3개월 누적 청구금액은 4% 감소했습니다. "
+        "당월 청구금액은 전월보다 0.13% 증가했지만 최근 3개월 누적 청구금액은 4% 감소했습니다."
+    )
+    assert candidate["detail"] == (
+        "당월 청구금액은 전월 100,000원에서 현재 100,130원으로 130원 증가했습니다. "
         "당월 청구금액을 전월값으로 대체한 재채점에서는 고위험 순위가 "
         "현재 81.4%에서 80.6%로 0.8%p 이동했습니다."
     )
-    assert candidate["fact"].count("당월 청구금액") == 2
+    assert candidate["fact"].count("당월 청구금액") == 1
     assert "위험 완화" not in candidate["fact"]
     assert "등급" not in candidate["fact"]
 
@@ -265,7 +313,7 @@ def test_billing_mixed_period_flow_uses_equal_display_rank_wording():
         "evidenceFeatureKeys": ["청구금액_B0", "f_청구금액증가"], "patternCode": "BILLING_PRESSURE",
     }
     payload = build_llm_input(
-        model_version="miribom-lgbm-v0.3", prompt_version="v3.2", prediction=prediction,
+        model_version="miribom-lgbm-v0.3", prompt_version="v3.3", prediction=prediction,
         reasons=[reason],
         current={"청구금액_B0": 90440, "청구금액_R3M": 104580},
         previous={"청구금액_B0": 100000, "청구금액_R3M": 100000},
@@ -276,7 +324,10 @@ def test_billing_mixed_period_flow_uses_equal_display_rank_wording():
         "indicatorId": "K1",
         "title": "청구 부담 흐름",
         "fact": (
-            "당월 청구금액은 전월보다 9.56% 감소했지만 최근 3개월 누적 청구금액은 4.58% 증가했습니다. "
+            "당월 청구금액은 전월보다 9.56% 감소했지만 최근 3개월 누적 청구금액은 4.58% 증가했습니다."
+        ),
+        "detail": (
+            "당월 청구금액은 전월 100,000원에서 현재 90,440원으로 9,560원 감소했습니다. "
             "당월 청구금액을 전월값으로 대체한 재채점에서도 표시상 고위험 순위는 "
             "81.4%로 동일했습니다."
         ),
@@ -303,10 +354,43 @@ def test_prompt_version_change_does_not_change_backend_numeric_context():
         "current": {"잔액_B0M": 99}, "previous": {"잔액_B0M": 100},
     }
 
-    before = build_llm_input(prompt_version="v3.1", **arguments)
-    after = build_llm_input(prompt_version="v3.2", **arguments)
+    before = build_llm_input(prompt_version="v3.2", **arguments)
+    after = build_llm_input(prompt_version="v3.3", **arguments)
 
     assert before["prediction"] == after["prediction"]
     assert before["modelReasons"] == after["modelReasons"]
     assert before["observedChanges"] == after["observedChanges"]
     assert before["indicatorCandidates"] == after["indicatorCandidates"]
+
+
+def test_unlinked_billing_signals_are_merged_into_one_indicator_candidate():
+    signals = [
+        {
+            "signalId": "S4",
+            "statement": "당월 청구금액은 전월보다 2% 감소했습니다.",
+            "featureKeys": ["청구금액_B0"],
+            "relationToModel": "CONTEXT",
+        },
+        {
+            "signalId": "S5",
+            "statement": "최근 3개월 누적 청구금액은 전월보다 17.62% 감소했습니다.",
+            "featureKeys": ["청구금액_R3M"],
+            "relationToModel": "CONTEXT",
+        },
+    ]
+
+    candidates = _indicator_candidates([], signals)
+
+    assert candidates == [{
+        "indicatorId": "K1",
+        "title": "청구 부담 흐름",
+        "fact": (
+            "당월 청구금액은 전월보다 2% 감소했습니다. "
+            "최근 3개월 누적 청구금액은 전월보다 17.62% 감소했습니다."
+        ),
+        "detail": "",
+        "modelRelation": "CONTEXT",
+        "reasonIds": [],
+        "signalIds": ["S4", "S5"],
+        "featureKeys": ["청구금액_B0", "청구금액_R3M"],
+    }]

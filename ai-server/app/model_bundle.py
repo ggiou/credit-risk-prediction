@@ -131,6 +131,14 @@ COUNTERFACTUAL_EVIDENCE = {
     "청구금액_B0": ("청구금액_B0", "f_청구금액증가"),
 }
 
+# 모델 입력 자체가 보유한 명시적 전월(B1M) 값이다. 대응 피처의 반사실 재채점에서는
+# 별도 전월 스냅샷보다 이 값을 우선해 B0/B1M의 월 기준을 혼동하지 않는다.
+EMBEDDED_PREVIOUS_FEATURES = {
+    "카드이용한도금액": "카드이용한도금액_B1M",
+    "잔액_현금서비스_B0M": "잔액_현금서비스_B1M",
+    "잔액_카드론_B0M": "잔액_카드론_B1M",
+}
+
 
 @dataclass(frozen=True)
 class ModelPrediction:
@@ -158,7 +166,10 @@ class ModelBundle:
 
     The artifact contains one-split LightGBM trees as:
       [featureIndex, isCategorical, thresholdOrCategoryIds,
-       defaultLeft, zeroAsMissing, leftLeaf, rightLeaf]
+       defaultLeft, missingType, leftLeaf, rightLeaf]
+
+    ``missingType`` follows LightGBM's compact code contract:
+      0 = None, 1 = NaN, 2 = Zero.
 
     Leaf values are already trained model values. This server does not retrain,
     alter, rescale, or rewrite the model artifact.
@@ -210,6 +221,11 @@ class ModelBundle:
             feature_index = int(tree[0])
             if feature_index < 0 or feature_index >= len(self.features):
                 raise ModelContractError(f"tree[{idx}] has invalid feature index")
+            missing_type = int(tree[4])
+            if missing_type not in {0, 1, 2}:
+                raise ModelContractError(
+                    f"tree[{idx}] has unsupported missingType: {missing_type}"
+                )
 
     @staticmethod
     def _sigmoid(raw_score: float) -> float:
@@ -264,20 +280,31 @@ class ModelBundle:
         is_categorical = bool(tree[1])
         threshold = tree[2]
         default_left = bool(tree[3])
-        zero_as_missing = bool(tree[4])
+        missing_type = int(tree[4])
         left_leaf = float(tree[5])
         right_leaf = float(tree[6])
 
         value = vector[feature_index]
-        missing = self._is_missing(value) or (
-            zero_as_missing and isinstance(value, (int, float)) and value == 0
-        )
-        if missing:
-            go_left = default_left
-        elif is_categorical:
-            go_left = int(value) in {int(v) for v in threshold}
+        missing = self._is_missing(value)
+
+        if is_categorical:
+            # 전달 predict.js 계약상 결측값과 음수 범주 코드는 어느 범주에도
+            # 속하지 않으므로 오른쪽으로 이동한다.
+            if missing:
+                go_left = False
+            else:
+                category = int(float(value))
+                go_left = category >= 0 and category in {int(v) for v in threshold}
         else:
-            go_left = float(value) <= float(threshold)
+            # LightGBM은 NaN을 결측으로 학습하지 않은 split(None/Zero)에서는
+            # NaN을 0으로 치환한 뒤 일반 임계값 비교를 수행한다.
+            numeric_value = 0.0 if missing and missing_type != 1 else value
+            if (missing_type == 1 and missing) or (
+                missing_type == 2 and float(numeric_value) == 0.0
+            ):
+                go_left = default_left
+            else:
+                go_left = float(numeric_value) <= float(threshold)
 
         selected = left_leaf if go_left else right_leaf
         return selected
@@ -365,19 +392,23 @@ class ModelBundle:
         현재 상태의 확정 원인이 아닌 counterfactual 근거로만 반환한다.
         """
 
-        if not previous:
-            return []
-
         current_prediction, _ = self.predict(current, previous)
-        self._monitor_protected_changes(current, previous, current_prediction)
+        if previous:
+            self._monitor_protected_changes(current, previous, current_prediction)
         candidates: list[tuple[float, dict[str, Any]]] = []
         for source_key in self.features:
             if source_key in DERIVED_FEATURES or source_key in EXCLUDED_REASON_FEATURES:
                 continue
-            if source_key not in current or source_key not in previous:
+            if source_key not in current:
                 continue
             current_value = current.get(source_key)
-            previous_value = previous.get(source_key)
+            embedded_key = EMBEDDED_PREVIOUS_FEATURES.get(source_key)
+            if embedded_key is not None and embedded_key in current:
+                previous_value = current.get(embedded_key)
+            elif previous is not None and source_key in previous:
+                previous_value = previous.get(source_key)
+            else:
+                continue
             if current_value == previous_value:
                 continue
 

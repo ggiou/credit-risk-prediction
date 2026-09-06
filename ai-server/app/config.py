@@ -28,7 +28,7 @@ class Settings:
             feature_schema_version=os.getenv("AI_FEATURE_SCHEMA_VERSION", "v1"),
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
-            prompt_version=os.getenv("AI_PROMPT_VERSION", "v3.2"),
+            prompt_version=os.getenv("AI_PROMPT_VERSION", "v3.6"),
             llm_timeout_seconds=float(os.getenv("AI_LLM_TIMEOUT_SECONDS", "60")),
             max_risk_factors=int(os.getenv("AI_MAX_RISK_FACTORS", "5")),
         )
