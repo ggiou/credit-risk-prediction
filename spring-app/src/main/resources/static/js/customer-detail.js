@@ -237,6 +237,10 @@ function setPredictionResultVisible(available, llm) {
         button.textContent = "AI 분석 시작";
         return;
     }
+    if (llm?.status === "SKIPPED_NO_EVIDENCE") {
+        actions.hidden = true;
+        return;
+    }
     if (llm?.status === "FAILED" || llm?.status === "NOT_REQUESTED") {
         actions.hidden = false;
         button.textContent = llm.status === "FAILED" ? "AI 설명 다시 생성" : "AI 설명 생성";
@@ -286,7 +290,9 @@ function renderExplanation(explanation, status, llmOutput, recommendation, empty
     if (!available) {
         container.textContent = emptyMessage || (status === "FAILED"
             ? "위험률은 계산됐지만 AI 설명 생성에 실패했습니다."
-            : "설명 생성이 요청되지 않았습니다.");
+            : status === "SKIPPED_NO_EVIDENCE"
+                ? "전월값 대체 재채점에서 모델 예측을 변경한 근거가 없어 AI 설명을 생성하지 않았습니다."
+                : "설명 생성이 요청되지 않았습니다.");
         return;
     }
 
@@ -582,7 +588,8 @@ function llmStatusName(status) {
     return {
         NOT_REQUESTED: "설명 미요청",
         COMPLETED: "설명 완료",
-        FAILED: "설명 실패"
+        FAILED: "설명 실패",
+        SKIPPED_NO_EVIDENCE: "설명 근거 없음"
     }[status] || status || "-";
 }
 /** 필드명과 값 유형에 따라 화면 표시 형식을 정한다. */

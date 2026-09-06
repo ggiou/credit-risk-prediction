@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     recommendation TEXT NULL COMMENT 'LLM reviewPoints 화면 호환 렌더링 문자열',
     llm_output JSON NULL COMMENT '검증 완료된 LLM 구조화 출력 원본',
     llm_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUESTED'
-        COMMENT 'LLM 설명 생성 상태: NOT_REQUESTED=요청 전, COMPLETED=생성 완료, FAILED=생성 실패',
+        COMMENT 'LLM 설명 상태: NOT_REQUESTED=미요청, COMPLETED=완료, FAILED=실패, SKIPPED_NO_EVIDENCE=근거 없음',
     prompt_version VARCHAR(64) NULL,
     predicted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -133,5 +133,5 @@ CREATE TABLE IF NOT EXISTS prediction_result (
     CONSTRAINT chk_cumulative_risk CHECK (cumulative_risk_3m BETWEEN 0 AND 1),
     CONSTRAINT chk_percentile CHECK (percentile BETWEEN 0 AND 100),
     CONSTRAINT chk_risk_grade CHECK (risk_grade IN ('NORMAL', 'INTEREST', 'CAUTION', 'WARNING')),
-    CONSTRAINT chk_llm_status CHECK (llm_status IN ('NOT_REQUESTED', 'COMPLETED', 'FAILED'))
+    CONSTRAINT chk_llm_status CHECK (llm_status IN ('NOT_REQUESTED', 'COMPLETED', 'FAILED', 'SKIPPED_NO_EVIDENCE'))
 ) COMMENT='모델 예측 및 LLM 설명 결과';

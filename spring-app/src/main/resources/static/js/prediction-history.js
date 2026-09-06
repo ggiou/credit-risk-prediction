@@ -23,6 +23,7 @@ function llmStatusName(status) {
     return {
         NOT_REQUESTED: "설명 미요청",
         COMPLETED: "설명 완료",
-        FAILED: "설명 실패"
+        FAILED: "설명 실패",
+        SKIPPED_NO_EVIDENCE: "설명 근거 없음"
     }[status] || status || "-";
 }

@@ -72,6 +72,21 @@ class PredictionCommandServiceTest {
     }
 
     @Test
+    void reusesCurrentPromptResultWhenExplanationWasSkippedForNoEvidence() {
+        Map<String, Object> reused = reusedResult("SKIPPED_NO_EVIDENCE", null, "v3.3");
+        PredictionDetailResponse detail = detail("SKIPPED_NO_EVIDENCE", null);
+        when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
+        when(predictionQueryService.toDetail(reused)).thenReturn(detail);
+
+        PredictionExecutionResponse response = service.execute(
+                CUSTOMER_ID, BASE_YM, true, "request-skipped-no-evidence");
+
+        assertThat(response.reused()).isTrue();
+        verify(aiPredictionClient, never()).predict(anyMap());
+        verify(predictionMapper, never()).updateRetriedExplanation(anyMap());
+    }
+
+    @Test
     void retriesMissingExplanationWithoutCreatingAnotherPrediction() {
         Map<String, Object> reused = reusedResult("FAILED", null, "v1.0");
         when(predictionMapper.findByFeatureSnapshotAndModel(10L, MODEL_VERSION)).thenReturn(reused);
