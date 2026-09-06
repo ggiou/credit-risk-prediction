@@ -43,8 +43,8 @@ const BOBulkCustomerSearch = (() => {
             trigger.classList.add("is-active");
             trigger.setAttribute("aria-label", `다량 검색: ${typeLabel} ${applied.values.length}개 적용됨`);
             trigger.title = `${typeLabel} ${applied.values.length}개 적용됨`;
-            singleInput.value = applied.values.join(", ");
-            singleInput.title = singleInput.value;
+            singleInput.value = `${applied.values.length}건 검색 중`;
+            singleInput.title = `${typeLabel} ${applied.values.length}건 다량 검색 중`;
             singleInput.readOnly = true;
         }
 
