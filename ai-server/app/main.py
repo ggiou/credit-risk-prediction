@@ -194,8 +194,26 @@ def predict(request: PredictRequest) -> PredictResponse:
     llm_error = None
 
     if request.generateExplanation:
-        llm = get_llm()
-        if llm is None:
+        llm_result = None
+        if not llm_input["modelReasons"] or not llm_input["indicatorCandidates"]:
+            llm_result = RiskExplanationClient.skipped_no_evidence(
+                input_payload=llm_input,
+                request_id=request.requestId,
+                customer_id=request.customerId,
+                base_ym=request.baseYm,
+                previous_features_available=request.previousFeatures is not None,
+            )
+        else:
+            llm = get_llm()
+            if llm is not None:
+                llm_result = llm.generate(
+                    input_payload=llm_input,
+                    request_id=request.requestId,
+                    customer_id=request.customerId,
+                    base_ym=request.baseYm,
+                    previous_features_available=request.previousFeatures is not None,
+                )
+        if llm_result is None:
             llm_status = "FAILED"
             llm_error = "OPENAI_API_KEY is not configured"
             LOGGER.error(
@@ -205,13 +223,6 @@ def predict(request: PredictRequest) -> PredictResponse:
                 request.baseYm,
             )
         else:
-            llm_result = llm.generate(
-                input_payload=llm_input,
-                request_id=request.requestId,
-                customer_id=request.customerId,
-                base_ym=request.baseYm,
-                previous_features_available=request.previousFeatures is not None,
-            )
             llm_status = llm_result.status
             explanation = llm_result.explanation
             llm_output = llm_result.structured_output

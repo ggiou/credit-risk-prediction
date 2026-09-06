@@ -183,9 +183,14 @@ public class PredictionCommandService {
         if (!generateExplanation) {
             return false;
         }
-        boolean completed = LlmStatus.COMPLETED.name().equals(String.valueOf(result.get("llmStatus")));
+        String llmStatus = String.valueOf(result.get("llmStatus"));
+        boolean completed = LlmStatus.COMPLETED.name().equals(llmStatus);
+        boolean skippedNoEvidence = LlmStatus.SKIPPED_NO_EVIDENCE.name().equals(llmStatus);
         Object explanation = result.get("explanation");
         boolean currentPrompt = promptVersion.equals(String.valueOf(result.get("promptVersion")));
+        if (skippedNoEvidence) {
+            return !currentPrompt;
+        }
         return !completed || explanation == null || String.valueOf(explanation).isBlank() || !currentPrompt;
     }
 
