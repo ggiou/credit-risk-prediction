@@ -11,9 +11,9 @@
             <label><input type="radio" name="bulkSearchType" value="customerNames"> 고객명</label>
         </fieldset>
         <label class="bulk-search-input-label" for="bulkCustomerValues">검색값</label>
-        <textarea id="bulkCustomerValues" rows="9" placeholder="SYN_100&#10;SYN_1004&#10;SYN_2030"></textarea>
+        <textarea id="bulkCustomerValues" rows="9" placeholder="다량입력은 줄바꿈 및 , 로 가능합니다"></textarea>
         <div class="bulk-search-help">
-            <span>한 줄에 하나씩 입력하세요. 쉼표로 구분해도 됩니다.</span>
+            <span>다량입력은 줄바꿈 및 , 로 가능합니다</span>
             <strong id="bulkCustomerValueCount">0 / 50개</strong>
         </div>
         <p id="bulkCustomerSearchError" class="error-message" hidden></p>
