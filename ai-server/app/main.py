@@ -210,6 +210,7 @@ def predict(request: PredictRequest) -> PredictResponse:
                 request_id=request.requestId,
                 customer_id=request.customerId,
                 base_ym=request.baseYm,
+                previous_features_available=request.previousFeatures is not None,
             )
             llm_status = llm_result.status
             explanation = llm_result.explanation

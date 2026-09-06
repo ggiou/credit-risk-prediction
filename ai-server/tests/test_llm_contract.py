@@ -345,6 +345,40 @@ def test_timeout_fails_once_without_correction_retry():
     assert responses.calls == 1
 
 
+def test_no_counterfactual_effect_skips_openai_request_with_precise_message():
+    input_payload = llm_input()
+    input_payload["modelReasons"] = []
+
+    class ResponsesMustNotBeCalled:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            raise AssertionError("OpenAI Responses API must not be called without model evidence")
+
+    responses = ResponsesMustNotBeCalled()
+    client = object.__new__(RiskExplanationClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.model = "test-model"
+    client.timeout_seconds = 60
+
+    result = client.generate(
+        input_payload=input_payload,
+        request_id="test-request",
+        customer_id="SYN_10001",
+        base_ym="201812",
+        previous_features_available=True,
+    )
+
+    assert result.status == "FAILED"
+    assert result.error_message == (
+        "전월 스냅샷은 존재하지만, 전월값 대체 재채점에서 모델 예측을 변경한 "
+        "피처가 없어 설명 근거를 생성하지 못했습니다."
+    )
+    assert responses.calls == 0
+
+
 def test_validation_failure_gets_one_correction_retry():
     invalid = valid_output()
     invalid["usedReasonIds"] = ["R404"]
