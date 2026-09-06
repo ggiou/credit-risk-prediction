@@ -2202,24 +2202,6 @@ body.has-modal {
     color: #fff;
 }
 
-.bulk-search-trigger.is-active::after {
-    content: attr(data-count);
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    display: grid;
-    place-items: center;
-    min-width: 17px;
-    height: 17px;
-    padding: 0 4px;
-    border: 2px solid #fff;
-    border-radius: 999px;
-    background: var(--blue);
-    color: #fff;
-    font-size: 9px;
-    line-height: 1;
-}
-
 .bulk-search-modal {
     width: min(560px, calc(100vw - 32px));
     padding: 0;
