@@ -100,7 +100,7 @@ class LlmOutput(BaseModel):
 
 
 class LlmMeta(BaseModel):
-    status: Literal["NOT_REQUESTED", "COMPLETED", "FAILED"]
+    status: Literal["NOT_REQUESTED", "COMPLETED", "FAILED", "SKIPPED_NO_EVIDENCE"]
     promptVersion: str
     errorMessage: str | None = None
 

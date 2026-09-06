@@ -31,6 +31,37 @@ def test_prediction_uses_json_model_and_preserves_legacy_percentile_field():
     assert body["recommendation"] is None
 
 
+def test_prediction_marks_no_evidence_as_skipped_without_openai_configuration():
+    model = get_model()
+    current = {name: 0 for name in model.features[:36]}
+    current.update({"연령": "40대", "Life_Stage": "4.자녀성장기(1)"})
+    previous = dict(current)
+
+    response = TestClient(app).post(
+        "/internal/v1/predictions",
+        json={
+            "requestId": "no-evidence",
+            "customerId": "SYN_NO_EVIDENCE",
+            "baseYm": "201812",
+            "featureSnapshotId": 2,
+            "previousFeatureSnapshotId": 1,
+            "featureSchemaVersion": "v1",
+            "expectedModelVersion": "miribom-lgbm-v0.3",
+            "promptVersion": "v3.6",
+            "generateExplanation": True,
+            "currentFeatures": current,
+            "previousFeatures": previous,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["llm"]["status"] == "SKIPPED_NO_EVIDENCE"
+    assert "전월 스냅샷은 존재하지만" in body["llm"]["errorMessage"]
+    assert body["riskFactors"] == []
+    assert body["llmOutput"] is None
+
+
 def test_llm_failure_keeps_json_model_prediction_and_counterfactual_reasons():
     model = get_model()
     current = {name: 0 for name in model.features[:36]}

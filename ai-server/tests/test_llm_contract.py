@@ -371,7 +371,7 @@ def test_no_counterfactual_effect_skips_openai_request_with_precise_message():
         previous_features_available=True,
     )
 
-    assert result.status == "FAILED"
+    assert result.status == "SKIPPED_NO_EVIDENCE"
     assert result.error_message == (
         "전월 스냅샷은 존재하지만, 전월값 대체 재채점에서 모델 예측을 변경한 "
         "피처가 없어 설명 근거를 생성하지 못했습니다."

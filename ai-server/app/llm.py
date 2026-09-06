@@ -753,38 +753,12 @@ class RiskExplanationClient:
         previous_features_available: bool = False,
     ) -> LlmResult:
         if not input_payload["modelReasons"] or not input_payload["indicatorCandidates"]:
-            reason_count = len(input_payload["modelReasons"])
-            indicator_count = len(input_payload["indicatorCandidates"])
-            LOGGER.warning(
-                "LLM explanation skipped before OpenAI request: no usable counterfactual evidence "
-                "requestId=%s customerId=%s baseYm=%s previousFeaturesAvailable=%s "
-                "reasonCount=%s indicatorCount=%s",
-                request_id,
-                customer_id,
-                base_ym,
-                str(previous_features_available).lower(),
-                reason_count,
-                indicator_count,
-            )
-            if not reason_count and previous_features_available:
-                error_message = (
-                    "전월 스냅샷은 존재하지만, 전월값 대체 재채점에서 모델 예측을 변경한 "
-                    "피처가 없어 설명 근거를 생성하지 못했습니다."
-                )
-            elif not reason_count:
-                error_message = (
-                    "전월 스냅샷이 없거나 전월값 대체 재채점에 사용할 수 있는 비교값이 없어 "
-                    "설명 근거를 생성하지 못했습니다."
-                )
-            else:
-                error_message = "모델 근거와 연결할 수 있는 주요 관찰 지표를 생성하지 못했습니다."
-            return LlmResult(
-                "FAILED",
-                None,
-                None,
-                [],
-                [],
-                error_message,
+            return self.skipped_no_evidence(
+                input_payload=input_payload,
+                request_id=request_id,
+                customer_id=customer_id,
+                base_ym=base_ym,
+                previous_features_available=previous_features_available,
             )
 
         schema = copy.deepcopy(OUTPUT_SCHEMA)
@@ -867,3 +841,41 @@ class RiskExplanationClient:
                     call_input = {**input_payload, "correction": f"이전 응답 검증 오류: {correction} 이 오류만 교정해 스키마대로 다시 작성하세요."}
 
         return LlmResult("FAILED", None, None, [], [], str(last_error)[:500] if last_error else "unknown LLM error")
+
+    @staticmethod
+    def skipped_no_evidence(
+        *,
+        input_payload: dict[str, Any],
+        request_id: str,
+        customer_id: str,
+        base_ym: str,
+        previous_features_available: bool,
+    ) -> LlmResult:
+        """LLM 호출 전에 설명 근거 부재를 분류하고 비과금 상태로 반환한다."""
+
+        reason_count = len(input_payload["modelReasons"])
+        indicator_count = len(input_payload["indicatorCandidates"])
+        LOGGER.warning(
+            "LLM explanation skipped before OpenAI request: no usable counterfactual evidence "
+            "requestId=%s customerId=%s baseYm=%s previousFeaturesAvailable=%s "
+            "reasonCount=%s indicatorCount=%s",
+            request_id,
+            customer_id,
+            base_ym,
+            str(previous_features_available).lower(),
+            reason_count,
+            indicator_count,
+        )
+        if not reason_count and previous_features_available:
+            error_message = (
+                "전월 스냅샷은 존재하지만, 전월값 대체 재채점에서 모델 예측을 변경한 "
+                "피처가 없어 설명 근거를 생성하지 못했습니다."
+            )
+        elif not reason_count:
+            error_message = (
+                "전월 스냅샷이 없거나 전월값 대체 재채점에 사용할 수 있는 비교값이 없어 "
+                "설명 근거를 생성하지 못했습니다."
+            )
+        else:
+            error_message = "모델 근거와 연결할 수 있는 주요 관찰 지표를 생성하지 못했습니다."
+        return LlmResult("SKIPPED_NO_EVIDENCE", None, None, [], [], error_message)
