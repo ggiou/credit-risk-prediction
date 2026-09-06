@@ -44,7 +44,14 @@
             AND pr.prediction_id IS NULL
         </if>
         <if test="condition.analysisStatus == 'COMPLETED'">
-            AND pr.prediction_id IS NOT NULL AND pr.llm_status = 'COMPLETED'
+            AND pr.prediction_id IS NOT NULL
+            AND pr.llm_status = 'COMPLETED'
+            AND pr.prompt_version = #{condition.promptVersion}
+        </if>
+        <if test="condition.analysisStatus == 'OUTDATED'">
+            AND pr.prediction_id IS NOT NULL
+            AND pr.llm_status = 'COMPLETED'
+            AND (pr.prompt_version IS NULL OR pr.prompt_version != #{condition.promptVersion})
         </if>
         <if test="condition.analysisStatus == 'PARTIAL'">
             AND pr.prediction_id IS NOT NULL AND pr.llm_status = 'FAILED'
@@ -73,6 +80,7 @@
                CASE
                    WHEN pr.prediction_id IS NULL THEN 'NOT_ANALYZED'
                    WHEN pr.llm_status = 'FAILED' THEN 'PARTIAL'
+                   WHEN pr.prompt_version IS NULL OR pr.prompt_version != #{condition.promptVersion} THEN 'OUTDATED'
                    ELSE 'COMPLETED'
                END AS analysisStatus,
                pr.risk_grade AS riskGrade,

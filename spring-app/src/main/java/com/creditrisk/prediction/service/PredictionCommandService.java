@@ -45,7 +45,7 @@ public class PredictionCommandService {
             "summary", "modelInterpretation", "keyIndicators", "changeContext", "reviewPoints",
             "managementPriority", "usedFeatureKeys", "usedReasonIds", "usedSignalIds", "generationMode");
     private static final Set<String> INDICATOR_KEYS = Set.of(
-            "title", "fact", "interpretation", "modelRelation", "reasonIds", "signalIds", "featureKeys");
+            "title", "fact", "detail", "interpretation", "modelRelation", "reasonIds", "signalIds", "featureKeys");
     private static final Set<String> MODEL_RELATIONS = Set.of(
             "RISK_INCREASE", "RISK_DECREASE", "MIXED", "CONTEXT");
     private static final Map<String, String> MANAGEMENT_PRIORITY_BY_GRADE = Map.of(
@@ -147,7 +147,8 @@ public class PredictionCommandService {
         Map<String, Object> insertValues = toInsertValues(aiResponse);
 
         if (hasResult(reused)) {
-            // 예측 행은 새로 만들지 않고 실패·미요청·이전 프롬프트의 LLM 결과만 안전하게 갱신한다.
+            // AI 서버는 설명 재생성 시 모델도 다시 실행하므로 같은 행의 위험률·등급·근거와
+            // 설명을 한 번에 갱신해 서로 다른 추론 결과가 섞이지 않도록 한다.
             long predictionId = ((Number) reused.get("predictionId")).longValue();
             insertValues.put("predictionId", predictionId);
             predictionMapper.updateRetriedExplanation(insertValues);
@@ -357,6 +358,7 @@ public class PredictionCommandService {
             if (!indicator.keySet().equals(INDICATOR_KEYS)
                     || !(indicator.get("title") instanceof String title) || title.isBlank()
                     || !(indicator.get("fact") instanceof String fact) || fact.isBlank()
+                    || !(indicator.get("detail") instanceof String)
                     || !(indicator.get("interpretation") instanceof String indicatorInterpretation)
                     || indicatorInterpretation.isBlank()
                     || !MODEL_RELATIONS.contains(String.valueOf(indicator.get("modelRelation")))) {
