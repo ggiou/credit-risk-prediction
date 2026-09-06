@@ -48,6 +48,7 @@ function modelFeatureLabel(value) {
 function analysisStatusName(status) {
     return {
         NOT_ANALYZED: "미분석",
+        OUTDATED: "재분석 필요",
         COMPLETED: "완료",
         PARTIAL: "부분 완료"
     }[status] || status || "-";

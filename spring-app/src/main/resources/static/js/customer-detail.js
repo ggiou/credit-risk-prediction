@@ -41,6 +41,7 @@ const FIELD_META = {
 };
 
 let predictionRequestInFlight = false;
+let indicatorDetailAbortController = new AbortController();
 
 document.addEventListener("DOMContentLoaded", async () => {
     const customerId = document.body.dataset.customerId;
@@ -213,7 +214,10 @@ function renderPrediction(data) {
     renderRiskPercentile(data.risk.topRiskPercent ?? data.risk.percentile);
     renderRiskFactors(data.riskFactors);
     renderExplanation(data.explanation, data.llm.status, data.llmOutput, data.recommendation);
-    document.getElementById("modelMeta").innerHTML = `<span>모델 ${BO.escape(data.modelVersion)}</span><span>피처 ${BO.escape(data.featureSchemaVersion)}</span><span>LLM ${BO.escape(llmStatusName(data.llm.status))}</span>`;
+    const promptVersionMeta = data.llm?.outdated
+        ? `<span>LLM 프롬프트 ${BO.escape(data.llm.promptVersion || "-")} → ${BO.escape(data.llm.currentPromptVersion || "-")} 업데이트 필요</span>`
+        : `<span>LLM ${BO.escape(llmStatusName(data.llm.status))}</span>`;
+    document.getElementById("modelMeta").innerHTML = `<span>모델 ${BO.escape(data.modelVersion)}</span><span>피처 ${BO.escape(data.featureSchemaVersion)}</span>${promptVersionMeta}`;
 }
 
 /** 분석하지 않은 기준월로 이동했을 때 이전 월 결과를 모두 비운다. */
@@ -240,7 +244,7 @@ function setPredictionResultVisible(available, llm) {
     }
     if (llm?.outdated) {
         actions.hidden = false;
-        button.textContent = "AI 설명 업데이트";
+        button.textContent = "AI 분석 다시 실행";
         return;
     }
     actions.hidden = true;
@@ -314,8 +318,10 @@ function renderExplanation(explanation, status, llmOutput, recommendation, empty
                     </div>
                     <span>${indicators.length}개 지표</span>
                 </div>
-                <div class="key-indicator-list">${indicators.map(indicator => {
+                <div class="key-indicator-list">${indicators.map((indicator, index) => {
                     const relation = String(indicator.modelRelation || "CONTEXT");
+                    const detail = String(indicator.detail || "").trim();
+                    const detailId = `keyIndicatorDetail-${index}`;
                     return `<details class="key-indicator-card relation-${relation.toLowerCase()}">
                         <summary class="key-indicator-heading">
                             <span class="key-indicator-title">
@@ -329,7 +335,16 @@ function renderExplanation(explanation, status, llmOutput, recommendation, empty
                         </summary>
                         <div class="key-indicator-content">
                             <div class="key-indicator-detail key-indicator-fact">
-                                <strong>관찰 사실</strong>
+                                <div class="key-indicator-detail-label">
+                                    <strong>관찰 사실</strong>
+                                    ${detail ? `<span class="key-indicator-detail-help">
+                                        <button type="button" class="key-indicator-detail-button" aria-label="상세 금액과 재채점 정보 보기" aria-expanded="false" aria-controls="${detailId}">
+                                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h8v11H4zM6 6h4M6 9h4"/></svg>
+                                            <span>상세</span>
+                                        </button>
+                                        <span class="key-indicator-detail-tooltip" id="${detailId}" role="tooltip"><strong>상세 금액·재채점</strong>${renderSentenceLines(detail)}</span>
+                                    </span>` : ""}
+                                </div>
                                 <p>${renderSentenceLines(indicator.fact)}</p>
                             </div>
                             <div class="key-indicator-detail key-indicator-interpretation">
@@ -342,6 +357,7 @@ function renderExplanation(explanation, status, llmOutput, recommendation, empty
             </div>` : "";
         indicatorContainer.hidden = !indicatorCards;
         indicatorContainer.innerHTML = indicatorCards;
+        setupIndicatorDetailTooltips(indicatorContainer);
         container.innerHTML = `
             <div class="explanation-current-state"><div><strong>현재 상태</strong>${priorityBadge}</div><p class="explanation-summary">${renderSentenceLines(llmOutput.summary)}</p></div>
             <div class="explanation-interpretation"><strong>모델 해석</strong><p>${renderSentenceLines(llmOutput.modelInterpretation)}</p></div>
@@ -365,6 +381,36 @@ function renderExplanation(explanation, status, llmOutput, recommendation, empty
         <h3 class="explanation-subtitle">주요 변화</h3>
         <ul class="explanation-list">${changes.map(item => `<li>${BO.escape(item)}</li>`).join("")}</ul>
         <div class="explanation-interpretation"><strong>모델 해석</strong><p>${BO.escape(interpretation)}</p></div>`;
+}
+
+/** 주요 관찰 지표의 원 단위 변화와 재채점 수치를 클릭·키보드·터치로 확인한다. */
+function setupIndicatorDetailTooltips(container) {
+    indicatorDetailAbortController.abort();
+    indicatorDetailAbortController = new AbortController();
+    const closeAll = except => {
+        container.querySelectorAll(".key-indicator-detail-help.is-detail-open").forEach(help => {
+            if (help === except) return;
+            help.classList.remove("is-detail-open");
+            help.querySelector(".key-indicator-detail-button")?.setAttribute("aria-expanded", "false");
+        });
+    };
+    container.querySelectorAll(".key-indicator-detail-button").forEach(button => {
+        button.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const help = button.closest(".key-indicator-detail-help");
+            const open = !help.classList.contains("is-detail-open");
+            closeAll(help);
+            help.classList.toggle("is-detail-open", open);
+            button.setAttribute("aria-expanded", String(open));
+        });
+    });
+    document.addEventListener("click", event => {
+        if (!container.contains(event.target) || !event.target.closest(".key-indicator-detail-help")) closeAll();
+    }, {signal: indicatorDetailAbortController.signal});
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") closeAll();
+    }, {signal: indicatorDetailAbortController.signal});
 }
 
 /** 구조화된 LLM 원문은 보존하면서 문장 종결 기호 뒤를 화면에서만 줄바꿈한다. */
@@ -437,7 +483,7 @@ function relativeRiskLevel(percentile) {
     return {label: "낮은 편", className: "risk-level-low"};
 }
 
-/** 백분위 설명을 마우스, 키보드, 터치에서 동일하게 열고 닫는다. */
+/** 백분위 설명은 데스크톱에서 아이콘 hover, 키보드 focus, 터치 화면에서 tap으로 연다. */
 function setupRiskPercentileTooltip() {
     const card = document.getElementById("riskPercentileCard");
     const button = document.getElementById("riskPercentileInfo");
@@ -446,8 +492,18 @@ function setupRiskPercentileTooltip() {
         card.classList.remove("is-tooltip-open");
         button.setAttribute("aria-expanded", "false");
     };
+    const open = () => {
+        card.classList.add("is-tooltip-open");
+        button.setAttribute("aria-expanded", "true");
+    };
+    const hoverPointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+    button.addEventListener("mouseenter", () => { if (hoverPointer.matches) open(); });
+    button.addEventListener("mouseleave", () => { if (hoverPointer.matches) close(); });
+    button.addEventListener("focus", open);
+    button.addEventListener("blur", close);
     button.addEventListener("click", event => {
         event.stopPropagation();
+        if (hoverPointer.matches) return;
         const open = card.classList.toggle("is-tooltip-open");
         button.setAttribute("aria-expanded", String(open));
     });
